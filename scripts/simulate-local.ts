@@ -11,7 +11,7 @@ import { GROUPS, allGroupMatches } from '../src/lib/tournament'
 import { simulateMatch, buildStandings, advancing, makeKnockoutMatches } from '../src/lib/simulation'
 import { calculatePickPoints } from '../src/lib/scoring'
 import { TEAM_MAP } from '../src/lib/teams'
-import type { Match, Pick } from '../src/types'
+import type { Match, MatchStage, Pick } from '../src/types'
 
 // ── Test participants ─────────────────────────────────────────────────────────
 const TEST_PICKS: Omit<Pick, 'id' | 'created_at' | 'total_points'>[] = [
@@ -127,7 +127,7 @@ function simKnockout(stage: string, startDate: Date) {
     teams = fin.map(m => m.home_score > m.away_score ? m.home_team : m.away_team)
   }
 
-  const newMatches = makeKnockoutMatches(teams, stage, startDate)
+  const newMatches = makeKnockoutMatches(teams, stage, startDate) as Omit<Match, 'id'>[]
   insertMatches(newMatches)
 
   const stageLabel = stage.replace('_', ' ')

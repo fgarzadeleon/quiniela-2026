@@ -7,6 +7,7 @@ const links = [
   { href: '/picks',    label: 'Make Your Pick' },
   { href: '/ranking',  label: 'Ranking' },
   { href: '/scores',   label: 'Live Scores' },
+  { href: '/live',     label: '▶ Simulate' },
 ]
 
 export default function Navbar() {
