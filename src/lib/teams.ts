@@ -1,5 +1,7 @@
 // Costs derived from OddsChecker average betting odds using log-scale formula:
-// cost = -36.2 * log10(avg_decimal_odds) + 124.56, rounded to nearest 5
+// cost = -36.2 * log10(avg_decimal_odds) + 124.56
+// Anchored: top team (France/Spain ~4.5/1) = 100 pts, lowest = 10 pts minimum
+// All values rounded to nearest 5.
 // Tiers mirror the scoring multiplier brackets from the 2022 Quiniela SantaClosera rules.
 
 import { Team, ScoringTable, Tier } from '@/types'
@@ -44,22 +46,22 @@ export const TEAMS: Team[] = [
   { name: 'South Korea',    flag: '🇰🇷', cost: 30,  tier: 'C' },
   { name: 'Ghana',          flag: '🇬🇭', cost: 30,  tier: 'C' },
 
-  // ── GROUP D ──  (underdogs)
+  // ── GROUP D ──  (underdogs — all rounded to nearest 5, minimum 10)
   { name: 'Australia',      flag: '🇦🇺', cost: 25,  tier: 'D' },
   { name: 'Tunisia',        flag: '🇹🇳', cost: 25,  tier: 'D' },
   { name: 'Iran',           flag: '🇮🇷', cost: 25,  tier: 'D' },
   { name: 'DR Congo',       flag: '🇨🇩', cost: 20,  tier: 'D' },
-  { name: 'South Africa',   flag: '🇿🇦', cost: 18,  tier: 'D' },
+  { name: 'South Africa',   flag: '🇿🇦', cost: 20,  tier: 'D' },
   { name: 'Qatar',          flag: '🇶🇦', cost: 15,  tier: 'D' },
   { name: 'Saudi Arabia',   flag: '🇸🇦', cost: 15,  tier: 'D' },
   { name: 'New Zealand',    flag: '🇳🇿', cost: 15,  tier: 'D' },
-  { name: 'Panama',         flag: '🇵🇦', cost: 12,  tier: 'D' },
-  { name: 'Cape Verde',     flag: '🇨🇻', cost: 12,  tier: 'D' },
+  { name: 'Panama',         flag: '🇵🇦', cost: 10,  tier: 'D' },
+  { name: 'Cape Verde',     flag: '🇨🇻', cost: 10,  tier: 'D' },
   { name: 'Iraq',           flag: '🇮🇶', cost: 10,  tier: 'D' },
   { name: 'Uzbekistan',     flag: '🇺🇿', cost: 10,  tier: 'D' },
-  { name: 'Jordan',         flag: '🇯🇴', cost: 8,   tier: 'D' },
-  { name: 'Curacao',        flag: '🇨🇼', cost: 8,   tier: 'D' },
-  { name: 'Haiti',          flag: '🇭🇹', cost: 5,   tier: 'D' },
+  { name: 'Jordan',         flag: '🇯🇴', cost: 10,  tier: 'D' },
+  { name: 'Curacao',        flag: '🇨🇼', cost: 10,  tier: 'D' },
+  { name: 'Haiti',          flag: '🇭🇹', cost: 10,  tier: 'D' },
 ]
 
 export const TEAM_MAP = new Map(TEAMS.map(t => [t.name, t]))
