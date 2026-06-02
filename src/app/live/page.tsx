@@ -274,7 +274,7 @@ export default function LivePage() {
                 return tm ? <span key={i} title={t} style={{ fontSize: '1.2rem', lineHeight: 1 }}>{tm.flag}</span> : null
               })}
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.24)', fontSize: '0.66rem' }}>{p.total_cost} / 230 pts</div>
+            <div style={{ color: 'rgba(255,255,255,0.24)', fontSize: '0.66rem' }}>{p.total_cost} / 300 pts</div>
           </div>
         ))}
       </div>

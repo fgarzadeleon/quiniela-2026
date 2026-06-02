@@ -8,10 +8,10 @@ const bebas = Bebas_Neue({ weight: '400', subsets: ['latin'], variable: '--font-
 
 export const metadata: Metadata = {
   title: 'Quiniela 2026 · World Cup',
-  description: 'Pick your 4 teams, track the scores, win the glory.',
+  description: 'Pick your 5 teams, track the scores, win the glory.',
   openGraph: {
     title: 'Quiniela 2026 · World Cup',
-    description: 'Pick your 4 teams, track the scores, win the glory.',
+    description: 'Pick your 5 teams, track the scores, win the glory.',
   },
 }
 

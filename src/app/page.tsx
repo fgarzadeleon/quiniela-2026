@@ -69,7 +69,7 @@ export default function HomePage() {
           </h1>
 
           <p className="text-white/60 mt-6 mb-10 text-lg max-w-lg mx-auto">
-            Pick your 4 teams. Stay under budget. Dominate the ranking.
+            Pick your 5 teams. Stay under budget. Dominate the ranking.
           </p>
 
           <CountdownTimer />

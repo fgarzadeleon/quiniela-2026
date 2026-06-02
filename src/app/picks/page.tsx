@@ -23,7 +23,7 @@ export default function PicksPage() {
           MAKE YOUR PICK
         </h1>
         <p className="text-white/60 mt-2 text-sm max-w-lg mx-auto">
-          Choose 4 teams. Stay under <strong className="text-white">230 points</strong>.
+          Choose <strong className="text-white">5 teams</strong>. Stay under <strong className="text-white">300 points</strong>.
           Pick at most <strong className="text-white">1 elite-tier team</strong>. Then lock it in.
         </p>
       </div>
