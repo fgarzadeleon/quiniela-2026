@@ -25,7 +25,10 @@ export interface Pick {
   team2: string
   team3: string
   team4: string
+  team5: string
   scorer1?: string
+  password_hash?: string
+  wildcard_used?: boolean
   scorer2?: string
   scorer3?: string
   total_cost: number

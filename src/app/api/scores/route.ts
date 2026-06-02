@@ -14,7 +14,7 @@ export async function GET() {
   }
 
   try {
-    const res = await fetch(`${FD_BASE}/competitions/WC/matches?status=LIVE,IN_PLAY,PAUSED,FINISHED`, {
+    const res = await fetch(`${FD_BASE}/competitions/WC/matches?status=SCHEDULED,TIMED,IN_PLAY,PAUSED,FINISHED`, {
       headers: { 'X-Auth-Token': FD_KEY },
       next: { revalidate: 30 },
     })

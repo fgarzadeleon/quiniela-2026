@@ -15,14 +15,14 @@ import type { Match, MatchStage, Pick } from '../src/types'
 
 // ── Test participants ─────────────────────────────────────────────────────────
 const TEST_PICKS: Omit<Pick, 'id' | 'created_at' | 'total_points'>[] = [
-  { name: 'Fede (host)',      team1: 'Brazil',    team2: 'Colombia',      team3: 'Scotland',      team4: 'Tunisia',     total_cost: 0 },
-  { name: 'Arturo (safe)',    team1: 'France',    team2: 'Belgium',       team3: 'Egypt',         team4: 'Qatar',       total_cost: 0 },
-  { name: 'Rodrigo (chaos)',  team1: 'Scotland',  team2: 'Australia',     team3: 'Haiti',         team4: 'Curacao',     total_cost: 0 },
-  { name: 'Elena (balanced)', team1: 'Germany',   team2: 'Morocco',       team3: 'Czech Republic',team4: 'New Zealand', total_cost: 0 },
-  { name: 'Mateo (CONMEBOL)',team1: 'Argentina', team2: 'Colombia',      team3: 'Ecuador',       team4: 'Panama',      total_cost: 0 },
-  { name: 'Sofía (Europa)',   team1: 'England',   team2: 'Norway',        team3: 'Sweden',        team4: 'Czech Republic', total_cost: 0 },
-  { name: 'Pablo (gambler)',  team1: 'Japan',     team2: 'Senegal',       team3: 'Bosnia',        team4: 'Saudi Arabia',total_cost: 0 },
-  { name: 'Carmen (host)',    team1: 'Mexico',    team2: 'USA',           team3: 'Canada',        team4: 'Panama',      total_cost: 0 },
+  { name: 'Fede (host)',      team1: 'Brazil',    team2: 'Colombia',      team3: 'Scotland',      team4: 'Tunisia',      team5: 'Jordan',     total_cost: 0 },
+  { name: 'Arturo (safe)',    team1: 'France',    team2: 'Belgium',       team3: 'Egypt',         team4: 'Qatar',        team5: 'Haiti',      total_cost: 0 },
+  { name: 'Rodrigo (chaos)',  team1: 'Scotland',  team2: 'Australia',     team3: 'Haiti',         team4: 'Curacao',      team5: 'Panama',     total_cost: 0 },
+  { name: 'Elena (balanced)', team1: 'Germany',   team2: 'Morocco',       team3: 'Czech Republic',team4: 'New Zealand',  team5: 'Iraq',       total_cost: 0 },
+  { name: 'Mateo (CONMEBOL)',team1: 'Argentina', team2: 'Colombia',      team3: 'Ecuador',       team4: 'Panama',       team5: 'Qatar',      total_cost: 0 },
+  { name: 'Sofía (Europa)',   team1: 'England',   team2: 'Norway',        team3: 'Sweden',        team4: 'Czech Republic',team5: 'Jordan',    total_cost: 0 },
+  { name: 'Pablo (gambler)',  team1: 'Japan',     team2: 'Senegal',       team3: 'Bosnia and Herzegovina', team4: 'Saudi Arabia', team5: 'Uzbekistan', total_cost: 0 },
+  { name: 'Carmen (host)',    team1: 'Mexico',    team2: 'USA',           team3: 'Canada',        team4: 'Panama',       team5: 'Curacao',    total_cost: 0 },
 ]
 
 // Compute costs
@@ -31,7 +31,7 @@ const picks: Pick[] = TEST_PICKS.map((p, i) => ({
   id: String(i),
   created_at: new Date().toISOString(),
   total_points: 0,
-  total_cost: [p.team1, p.team2, p.team3, p.team4].reduce((s, t) => s + (TEAM_MAP.get(t)?.cost ?? 0), 0),
+  total_cost: [p.team1, p.team2, p.team3, p.team4, p.team5].reduce((s, t) => s + (TEAM_MAP.get(t)?.cost ?? 0), 0),
 }))
 
 // ── In-memory match store ─────────────────────────────────────────────────────
@@ -89,11 +89,11 @@ function printGroupStandings() {
 
 // ── Simulation ────────────────────────────────────────────────────────────────
 function simRound(round: number) {
-  const base = new Date('2026-06-11T16:00:00Z').getTime()
+  const base = new Date('2026-06-11T00:00:00Z').getTime()
   const ranges: Record<number, [number, number]> = {
-    1: [base,               base + 3 * 86400_000],
-    2: [base + 4 * 86400_000, base + 8 * 86400_000],
-    3: [base + 9 * 86400_000, base + 20 * 86400_000],
+    1: [base,                   base + 7 * 86400_000],   // Jun 11–17
+    2: [base + 7 * 86400_000,   base + 13 * 86400_000],  // Jun 18–23
+    3: [base + 13 * 86400_000,  base + 20 * 86400_000],  // Jun 24–27
   }
   const [from, to] = ranges[round]
   const pending = matches.filter(m =>

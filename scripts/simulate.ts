@@ -48,11 +48,11 @@ async function finishRound(round: number) {
   // Fetch scheduled group-stage matches for this round
   // We stored _round in the match data but Supabase doesn't have that column.
   // Instead, use match_date ranges: round 1 = day 0-3, round 2 = day 4-8, round 3 = day 9+
-  const base = new Date('2026-06-11T16:00:00Z').getTime()
+  const base = new Date('2026-06-11T00:00:00Z').getTime()
   const ranges: Record<number, [Date, Date]> = {
-    1: [new Date(base),             new Date(base + 3 * 86400_000)],
-    2: [new Date(base + 4 * 86400_000), new Date(base + 8 * 86400_000)],
-    3: [new Date(base + 9 * 86400_000), new Date(base + 20 * 86400_000)],
+    1: [new Date(base),                    new Date(base + 7 * 86400_000)],   // Jun 11–17
+    2: [new Date(base + 7 * 86400_000),    new Date(base + 13 * 86400_000)],  // Jun 18–23
+    3: [new Date(base + 13 * 86400_000),   new Date(base + 20 * 86400_000)],  // Jun 24–27
   }
   const [from, to] = ranges[round]
 

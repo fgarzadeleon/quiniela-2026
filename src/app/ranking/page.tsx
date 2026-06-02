@@ -7,17 +7,16 @@ interface RankedPick {
   id: string
   rank: number
   name: string
-  team1: string; team2: string; team3: string; team4: string
+  team1: string | null; team2: string | null; team3: string | null
+  team4: string | null; team5: string | null
   scorer1?: string; scorer2?: string; scorer3?: string
   total_cost: number
   total_points: number
+  wildcard_used?: boolean
 }
 
 const TIER_FLAG_COLORS: Record<Tier, string> = {
-  A: '#D72638',
-  B: '#2A4AB0',
-  C: '#1A6A2A',
-  D: '#7A5A00',
+  A: '#D72638', B: '#2A4AB0', C: '#1A6A2A', D: '#7A5A00',
 }
 
 const MEDAL = ['🥇', '🥈', '🥉']
@@ -37,13 +36,18 @@ function TeamPill({ name }: { name: string }) {
 
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
+  const [tournamentStarted, setTournamentStarted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/ranking')
       .then(r => r.json())
-      .then(d => { setPicks(d); setLoading(false) })
+      .then(d => {
+        setPicks(d.ranked ?? [])
+        setTournamentStarted(d.tournamentStarted ?? false)
+        setLoading(false)
+      })
       .catch(() => { setError('Could not load ranking'); setLoading(false) })
   }, [])
 
@@ -62,16 +66,25 @@ export default function RankingPage() {
         >
           RANKING
         </h1>
-        <p className="text-white/50 text-sm mt-1">Updated after every match</p>
+        <p className="text-white/50 text-sm mt-1">
+          {tournamentStarted ? 'Updated after every match' : 'Teams are hidden until the tournament kicks off'}
+        </p>
       </div>
 
-      {loading && (
-        <div className="text-center text-white/40 py-20">Loading ranking…</div>
+      {!tournamentStarted && picks.length > 0 && (
+        <div
+          className="rounded-xl px-4 py-3 mb-6 flex items-center gap-3 text-sm"
+          style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}
+        >
+          <span className="text-xl">🔒</span>
+          <span className="text-white/70">
+            <strong className="text-[#F5C518]">{picks.length} entries</strong> locked in — team picks revealed at kick-off on June 11.
+          </span>
+        </div>
       )}
 
-      {error && (
-        <div className="text-center text-[#D72638] py-20">{error}</div>
-      )}
+      {loading && <div className="text-center text-white/40 py-20">Loading ranking…</div>}
+      {error && <div className="text-center text-[#D72638] py-20">{error}</div>}
 
       {!loading && !error && picks.length === 0 && (
         <div className="text-center text-white/40 py-20">
@@ -93,39 +106,44 @@ export default function RankingPage() {
               }}
               className="rounded-xl p-4 flex items-start gap-4"
             >
-              {/* Rank */}
               <div className="text-2xl min-w-8 text-center">
                 {i < 3 ? MEDAL[i] : <span className="text-white/40 text-lg font-bold">#{p.rank}</span>}
               </div>
 
-              {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="font-bold text-white text-base">{p.name}</span>
-                  <span
-                    style={{
-                      fontFamily: 'Impact, sans-serif',
-                      fontSize: '1.3rem',
-                      color: i === 0 ? '#F5C518' : '#fff',
-                    }}
-                  >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-base">{p.name}</span>
+                    {p.wildcard_used && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
+                    )}
+                  </div>
+                  <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', color: i === 0 ? '#F5C518' : '#fff' }}>
                     {p.total_points.toLocaleString()} pts
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <TeamPill name={p.team1} />
-                  <TeamPill name={p.team2} />
-                  <TeamPill name={p.team3} />
-                  <TeamPill name={p.team4} />
-                </div>
-                {(p.scorer1 || p.scorer2 || p.scorer3) && (
+
+                {tournamentStarted && p.team1 ? (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean).map(t => (
+                      <TeamPill key={t} name={t!} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex gap-1.5 mt-2">
+                    {[1,2,3,4,5].map(n => (
+                      <span key={n} className="inline-block w-16 h-5 rounded-full bg-white/5 border border-white/10" />
+                    ))}
+                  </div>
+                )}
+
+                {tournamentStarted && (p.scorer1 || p.scorer2 || p.scorer3) && (
                   <div className="mt-1.5 text-xs text-white/40">
                     ⚽ {[p.scorer1, p.scorer2, p.scorer3].filter(Boolean).join(' · ')}
                   </div>
                 )}
               </div>
 
-              {/* Budget indicator */}
               <div className="text-right text-xs text-white/30 hidden sm:block">
                 <div>{p.total_cost} pts</div>
                 <div>budget</div>

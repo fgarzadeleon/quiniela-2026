@@ -1,384 +1,500 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
+import { allGroupMatches } from '@/lib/tournament'
+import { simulateMatch, buildStandings, advancing, makeKnockoutMatches } from '@/lib/simulation'
+import { calculatePickPoints } from '@/lib/scoring'
 import { TEAM_MAP } from '@/lib/teams'
-import { Tier } from '@/types'
+import type { Match, Pick } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface MatchEvent {
-  id: string
-  home_team: string; away_team: string
-  home_score: number; away_score: number
-  stage: string; group?: string; winner?: string
+
+interface TeamRecord { team: string; pts: number; gd: number; gf: number; group: string; played: number }
+interface RankEntry { id: string; name: string; team1: string; team2: string; team3: string; team4: string; total_cost: number; pts: number; rank: number }
+
+// ── Seed picks ────────────────────────────────────────────────────────────────
+
+const SEED = [
+  { name: 'Fede',    team1: 'Brazil',    team2: 'Colombia',              team3: 'Scotland',       team4: 'Tunisia',    team5: 'Jordan' },
+  { name: 'Arturo',  team1: 'France',    team2: 'Belgium',               team3: 'Egypt',          team4: 'Qatar',      team5: 'Haiti' },
+  { name: 'Rodrigo', team1: 'Scotland',  team2: 'Australia',             team3: 'Haiti',          team4: 'Curacao',    team5: 'Panama' },
+  { name: 'Elena',   team1: 'Germany',   team2: 'Morocco',               team3: 'Czech Republic', team4: 'New Zealand',team5: 'Iraq' },
+  { name: 'Mateo',   team1: 'Argentina', team2: 'Colombia',              team3: 'Ecuador',        team4: 'Panama',     team5: 'Qatar' },
+  { name: 'Sofía',   team1: 'England',   team2: 'Norway',                team3: 'Sweden',         team4: 'Czech Republic', team5: 'Jordan' },
+  { name: 'Pablo',   team1: 'Japan',     team2: 'Senegal',               team3: 'Bosnia and Herzegovina', team4: 'Saudi Arabia', team5: 'Uzbekistan' },
+  { name: 'Carmen',  team1: 'Mexico',    team2: 'USA',                   team3: 'Canada',         team4: 'Panama',     team5: 'Curacao' },
+  { name: 'Luisa',   team1: 'Spain',     team2: 'Croatia',               team3: 'South Korea',    team4: 'Iraq',       team5: 'Haiti' },
+  { name: 'Diego',   team1: 'Portugal',  team2: 'Uruguay',               team3: 'Ghana',          team4: 'Cape Verde', team5: 'Uzbekistan' },
+]
+
+function makePicks(): Pick[] {
+  return SEED.map((s, i) => ({
+    id: String(i), created_at: new Date().toISOString(),
+    email: undefined, total_points: 0,
+    scorer1: undefined, scorer2: undefined, scorer3: undefined,
+    ...s,
+    total_cost: [s.team1, s.team2, s.team3, s.team4, s.team5]
+      .reduce((sum, t) => sum + (TEAM_MAP.get(t)?.cost ?? 0), 0),
+  }))
 }
 
-interface RankEntry {
-  id: string; name: string
-  team1: string; team2: string; team3: string; team4: string
-  total_cost: number; pts: number; rank: number
+// ── Stage config — one colour per stage, rainbow progression ──────────────────
+
+const STAGES = [
+  { label: 'GROUP STAGE · ROUND 1', cta: 'SIMULATE ROUND 2',  color: '#FFD700', dark: true  },
+  { label: 'GROUP STAGE · ROUND 2', cta: 'SIMULATE ROUND 3',  color: '#FF8C00', dark: false },
+  { label: 'GROUP STAGE · ROUND 3', cta: 'ROUND OF 32',       color: '#FF3A2D', dark: false },
+  { label: 'ROUND OF 32',           cta: 'ROUND OF 16',       color: '#00D48A', dark: true  },
+  { label: 'ROUND OF 16',           cta: 'QUARTERFINALS',     color: '#0099FF', dark: false },
+  { label: 'QUARTERFINALS',         cta: 'SEMIFINALS',        color: '#B040F0', dark: false },
+  { label: 'SEMIFINALS',            cta: 'THE FINAL',         color: '#FF3A2D', dark: false },
+  { label: 'THE FINAL',             cta: 'PLAY AGAIN ↺',      color: '#FFD700', dark: true  },
+]
+
+// ── Date ranges for group-stage rounds ────────────────────────────────────────
+
+const BASE_MS = new Date('2026-06-11T00:00:00Z').getTime()
+const ROUND_RANGES: Record<number, [number, number]> = {
+  1: [BASE_MS,                    BASE_MS + 7 * 86400_000],
+  2: [BASE_MS + 7 * 86400_000,    BASE_MS + 13 * 86400_000],
+  3: [BASE_MS + 13 * 86400_000,   BASE_MS + 20 * 86400_000],
 }
 
-interface GroupTable {
-  team: string; group: string; pts: number; gd: number; gf: number; played: number
+// ── Simulation logic (pure, client-side) ─────────────────────────────────────
+
+function simGroupRound(matches: Match[], round: number): { next: Match[]; results: Match[] } {
+  const [from, to] = ROUND_RANGES[round]
+  const next = [...matches]
+  const results: Match[] = []
+  matches.forEach((m, i) => {
+    if (m.stage !== 'GROUP_STAGE' || m.status !== 'SCHEDULED') return
+    const ms = new Date(m.match_date).getTime()
+    if (ms < from || ms >= to) return
+    const r = simulateMatch(m.home_team, m.away_team)
+    next[i] = { ...m, home_score: r.home_score, away_score: r.away_score, status: 'FINISHED' }
+    results.push(next[i])
+  })
+  return { next, results }
 }
 
-type Phase = 'idle' | 'running' | 'done'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-const TIER_COLORS: Record<Tier, string> = { A: '#D72638', B: '#2A4AB0', C: '#1A6A2A', D: '#7A5A00' }
-
-function Flag({ team, size = 'md' }: { team: string; size?: 'sm' | 'md' | 'lg' }) {
-  const t = TEAM_MAP.get(team)
-  const sz = size === 'sm' ? '1rem' : size === 'lg' ? '2rem' : '1.4rem'
-  return <span style={{ fontSize: sz, lineHeight: 1 }}>{t?.flag ?? '🏳'}</span>
+const PREV_STAGE: Record<string, string> = {
+  ROUND_OF_16: 'ROUND_OF_32', QUARTER_FINALS: 'ROUND_OF_16',
+  SEMI_FINALS: 'QUARTER_FINALS', FINAL: 'SEMI_FINALS',
 }
 
-function TeamName({ team, bold }: { team: string; bold?: boolean }) {
-  return <span className={bold ? 'font-bold text-white' : 'text-white/80'}>{team}</span>
+function simKnockout(matches: Match[], stage: string): { next: Match[]; results: Match[] } {
+  let teams: string[]
+  if (stage === 'ROUND_OF_32') {
+    teams = advancing(buildStandings(matches.filter(m => m.stage === 'GROUP_STAGE' && m.status === 'FINISHED')))
+  } else {
+    teams = matches
+      .filter(m => m.stage === PREV_STAGE[stage] && m.status === 'FINISHED')
+      .map(m => m.home_score > m.away_score ? m.home_team : m.away_team)
+  }
+  const templates = makeKnockoutMatches(teams, stage, new Date()) as Omit<Match, 'id'>[]
+  let ctr = matches.length
+  const results: Match[] = templates.map(tpl => {
+    let { home_score: hs, away_score: as_ } = simulateMatch(tpl.home_team, tpl.away_team)
+    if (hs === as_) { Math.random() > 0.5 ? hs++ : as_++ }
+    return { ...tpl, id: String(ctr++), home_score: hs, away_score: as_, status: 'FINISHED' as const }
+  })
+  return { next: [...matches, ...results], results }
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  GROUP_STAGE: 'Groups', ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
-  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: '🏆 Final',
+// ── Visual: concentric rectangles — the 2026 WC tunnel ───────────────────────
+
+const TUNNEL_BANDS = ['#FF3A2D', '#FF8C00', '#FFD700', '#00D48A', '#0099FF', '#5040EE', '#B040F0']
+
+function Tunnel({ size = 140 }: { size?: number }) {
+  const step = Math.max(8, Math.floor(size / (TUNNEL_BANDS.length + 2)))
+  const bw = Math.max(3, step - 2)
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      {TUNNEL_BANDS.map((c, i) => (
+        <div key={i} style={{
+          position: 'absolute', inset: `${i * step}px`,
+          border: `${bw}px solid ${c}`, borderRadius: 4,
+        }} />
+      ))}
+      <div style={{
+        position: 'absolute', inset: `${TUNNEL_BANDS.length * step}px`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#070B1A', borderRadius: 2,
+        fontSize: `${Math.max(14, size * 0.18)}px`, lineHeight: 1,
+      }}>🏆</div>
+    </div>
+  )
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ── Match card ────────────────────────────────────────────────────────────────
+
+function MatchCard({ m, accent, showAdv }: { m: Match; accent: string; showAdv?: boolean }) {
+  const hWin = m.home_score > m.away_score
+  const aWin = m.away_score > m.home_score
+  const hTeam = TEAM_MAP.get(m.home_team)
+  const aTeam = TEAM_MAP.get(m.away_team)
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.033)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderLeft: `3px solid ${accent}`,
+      borderRadius: 8, padding: '0.4rem 0.7rem',
+      display: 'flex', alignItems: 'center', gap: '0.4rem',
+    }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.3rem', minWidth: 0 }}>
+        <span style={{
+          fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          color: hWin ? '#fff' : 'rgba(255,255,255,0.38)', fontWeight: hWin ? 700 : 400,
+        }}>{m.home_team}</span>
+        <span style={{ fontSize: '1.1rem', flexShrink: 0, lineHeight: 1 }}>{hTeam?.flag ?? '🏳'}</span>
+      </div>
+      <div style={{
+        fontFamily: 'var(--font-bebas, Impact)', fontSize: '1.1rem', letterSpacing: '0.04em',
+        color: accent, minWidth: '3rem', textAlign: 'center', flexShrink: 0,
+      }}>{m.home_score} – {m.away_score}</div>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0 }}>
+        <span style={{ fontSize: '1.1rem', flexShrink: 0, lineHeight: 1 }}>{aTeam?.flag ?? '🏳'}</span>
+        <span style={{
+          fontSize: '0.76rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          color: aWin ? '#fff' : 'rgba(255,255,255,0.38)', fontWeight: aWin ? 700 : 400,
+        }}>{m.away_team}</span>
+      </div>
+      {showAdv && (
+        <span style={{
+          fontSize: '0.6rem', color: 'rgba(255,255,255,0.28)',
+          borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: '0.4rem', flexShrink: 0,
+        }}>{hWin ? '→' : aWin ? '←' : '='}</span>
+      )}
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function LivePage() {
-  const [phase, setPhase]         = useState<Phase>('idle')
-  const [stage, setStage]         = useState('')
-  const [feed, setFeed]           = useState<MatchEvent[]>([])
-  const [ranking, setRanking]     = useState<RankEntry[]>([])
-  const [prevRanks, setPrevRanks] = useState<Record<string, number>>({})
-  const [standings, setStandings] = useState<Record<string, GroupTable[]> | null>(null)
-  const [champion, setChampion]   = useState<{ team: string; flag: string } | null>(null)
-  const [elapsed, setElapsed]     = useState(0)
-  const feedRef   = useRef<HTMLDivElement>(null)
-  const esRef     = useRef<EventSource | null>(null)
-  const startRef  = useRef<number>(0)
-  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [stageIdx, setStageIdx]   = useState(-1)
+  const [matches, setMatches]     = useState<Match[]>([])
+  const [picks]                   = useState<Pick[]>(makePicks)
+  const [lastResults, setResults] = useState<Match[]>([])
+  const [prevRanks, setPrev]      = useState<Record<string, number>>({})
+  const [standings, setStandings] = useState<Record<string, TeamRecord[]> | null>(null)
+  const [champion, setChampion]   = useState<string | null>(null)
 
-  const TOTAL = 300 // seconds
+  function calcRanking(): RankEntry[] {
+    const fin = matches.filter(m => m.status === 'FINISHED')
+    return picks
+      .map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost, pts: calculatePickPoints(p, fin), rank: 0 }))
+      .sort((a, b) => b.pts - a.pts)
+      .map((p, i) => ({ ...p, rank: i + 1 }))
+  }
 
-  function start() {
-    setPhase('running')
-    setFeed([]); setRanking([]); setStandings(null); setChampion(null); setElapsed(0)
-    startRef.current = Date.now()
+  function commit(nextIdx: number, nextMatches: Match[], results: Match[]) {
+    setPrev(calcRanking().reduce<Record<string, number>>((a, r) => { a[r.name] = r.rank; return a }, {}))
+    setMatches(nextMatches)
+    setResults(results)
+    setStageIdx(nextIdx)
+  }
 
-    timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
-    }, 500)
-
-    const es = new EventSource('/api/simulate-live')
-    esRef.current = es
-
-    es.addEventListener('init', (e) => {
-      const { picks } = JSON.parse(e.data)
-      setRanking(picks.map((p: RankEntry, i: number) => ({ ...p, pts: 0, rank: i + 1 })))
-    })
-
-    es.addEventListener('stage', (e) => {
-      const { label } = JSON.parse(e.data)
-      setStage(label)
-      setStandings(null)
-    })
-
-    es.addEventListener('match', (e) => {
-      const m: MatchEvent = JSON.parse(e.data)
-      const id = `${m.home_team}-${m.away_team}-${Date.now()}`
-      setFeed(prev => [{ ...m, id }, ...prev].slice(0, 80))
-    })
-
-    es.addEventListener('ranking', (e) => {
-      const data: RankEntry[] = JSON.parse(e.data)
-      setPrevRanks(prev => {
-        const next = { ...prev }
-        ranking.forEach(r => { next[r.name] = r.rank })
-        return next
-      })
-      setRanking(data)
-    })
-
-    es.addEventListener('standings', (e) => {
-      setStandings(JSON.parse(e.data))
-    })
-
-    es.addEventListener('champion', (e) => {
-      setChampion(JSON.parse(e.data))
-    })
-
-    es.addEventListener('done', () => {
-      setPhase('done')
-      if (timerRef.current) clearInterval(timerRef.current)
-      es.close()
-    })
-
-    es.onerror = () => {
-      if (phase === 'running') {
-        setPhase('done')
-        if (timerRef.current) clearInterval(timerRef.current)
+  function handleClick() {
+    if (stageIdx === 7) {
+      setStageIdx(-1); setMatches([]); setResults([]); setPrev({}); setStandings(null); setChampion(null)
+      return
+    }
+    if (stageIdx === -1) {
+      const all = allGroupMatches().map((m, i) => ({ ...m, id: String(i) })) as Match[]
+      const { next, results } = simGroupRound(all, 1)
+      commit(0, next, results); return
+    }
+    if (stageIdx === 0) { const { next, results } = simGroupRound(matches, 2); commit(1, next, results); return }
+    if (stageIdx === 1) {
+      const { next, results } = simGroupRound(matches, 3)
+      setStandings(buildStandings(next.filter(m => m.stage === 'GROUP_STAGE' && m.status === 'FINISHED')) as Record<string, TeamRecord[]>)
+      commit(2, next, results); return
+    }
+    const KO = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
+    const ki = stageIdx - 2
+    if (ki >= 0 && ki < KO.length) {
+      const { next, results } = simKnockout(matches, KO[ki])
+      if (KO[ki] === 'FINAL' && results[0]) {
+        setChampion(results[0].home_score > results[0].away_score ? results[0].home_team : results[0].away_team)
       }
-      es.close()
+      commit(stageIdx + 1, next, results)
     }
   }
 
-  function restart() {
-    esRef.current?.close()
-    if (timerRef.current) clearInterval(timerRef.current)
-    setPhase('idle'); setFeed([]); setRanking([]); setStage(''); setStandings(null); setChampion(null); setElapsed(0)
-  }
+  const stage   = STAGES[stageIdx]
+  const accent  = stage?.color ?? '#FFD700'
+  const ctaDark = stage?.dark ?? true
+  const ranked  = calcRanking()
+  const isGroup = stageIdx >= 0 && stageIdx <= 2
 
-  useEffect(() => () => { esRef.current?.close(); if (timerRef.current) clearInterval(timerRef.current) }, [])
+  const byGroup = lastResults.reduce<Record<string, Match[]>>((acc, m) => {
+    const k = m.group_name ?? 'Match'
+    ;(acc[k] = acc[k] ?? []).push(m)
+    return acc
+  }, {})
 
-  const pct = Math.min((elapsed / TOTAL) * 100, 100)
-  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0')
-  const ss = String(elapsed % 60).padStart(2, '0')
+  // ── IDLE ─────────────────────────────────────────────────────────────────────
+  if (stageIdx === -1) return (
+    <div style={{
+      background: 'linear-gradient(160deg, #070B1A 0%, #0C1328 45%, #080A18 100%)',
+      minHeight: 'calc(100vh - 3.5rem)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '2.5rem 1rem 2rem', gap: '2rem',
+    }}>
+      <Tunnel size={160} />
 
-  // ── Idle screen ──────────────────────────────────────────────────────────────
-  if (phase === 'idle') return (
-    <div
-      style={{ background: 'linear-gradient(135deg, #060B1A 0%, #0B1B4D 50%, #1A0A0A 100%)', minHeight: 'calc(100vh - 7rem)' }}
-      className="flex flex-col items-center justify-center px-4 text-center"
-    >
-      <div className="text-6xl mb-4">⚽</div>
-      <h1 style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(2rem, 6vw, 4rem)', background: 'linear-gradient(90deg, #F5C518, #D72638)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-        LIVE SIMULATION
-      </h1>
-      <p className="text-white/50 mt-3 mb-2 max-w-md">
-        Watch the 2026 World Cup play out in real time. 10 participants, 103 matches, 5 minutes.
-      </p>
-      <p className="text-white/30 text-sm mb-10">Rankings update live after every match.</p>
-      <button
-        onClick={start}
-        className="px-10 py-4 rounded-2xl font-bold text-xl tracking-widest uppercase transition-all hover:scale-105 active:scale-95"
-        style={{ background: 'linear-gradient(135deg, #D72638, #8B0A1A)', color: '#fff', fontFamily: 'Impact, sans-serif', letterSpacing: '0.12em', boxShadow: '0 0 40px rgba(215,38,56,0.4)' }}
-      >
-        ▶ START THE WORLD CUP
-      </button>
-    </div>
-  )
-
-  // ── Champion screen overlay ───────────────────────────────────────────────────
-  const ChampionBanner = champion && (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center text-center px-4"
-      style={{ background: 'rgba(6,11,26,0.95)', backdropFilter: 'blur(8px)' }}
-    >
-      <div style={{ fontSize: '5rem', lineHeight: 1 }}>{champion.flag}</div>
-      <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(2.5rem, 8vw, 5rem)', background: 'linear-gradient(90deg, #F5C518, #D72638)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', letterSpacing: '0.05em' }}>
-        {champion.team.toUpperCase()}
-      </h2>
-      <p style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.5rem', color: '#F5C518', letterSpacing: '0.2em' }}>
-        2026 WORLD CUP CHAMPION
-      </p>
-      {ranking[0] && (
-        <p className="text-white/60 mt-4 text-sm">
-          🏆 Quiniela winner: <strong className="text-white">{ranking[0].name}</strong> with {ranking[0].pts.toLocaleString()} pts
-        </p>
-      )}
-      <button onClick={restart} className="mt-8 px-6 py-2 rounded-xl border border-white/20 text-white/60 hover:text-white hover:border-white/40 text-sm transition-colors">
-        Run again
-      </button>
-    </div>
-  )
-
-  // ── Running / Done screen ─────────────────────────────────────────────────────
-  return (
-    <div style={{ background: '#060B1A', minHeight: 'calc(100vh - 7rem)' }}>
-      {ChampionBanner}
-
-      {/* Header bar */}
-      <div style={{ background: 'linear-gradient(90deg, #0B1B4D, #1A0A1A)', borderBottom: '1px solid rgba(255,255,255,0.08)' }} className="sticky top-14 z-30 px-4 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            {phase === 'running' && <span className="w-2 h-2 rounded-full bg-[#D72638] animate-pulse inline-block" />}
-            <span style={{ fontFamily: 'Impact, sans-serif', color: '#F5C518', fontSize: '1.1rem', letterSpacing: '0.1em' }}>
-              {stage || 'INITIALISING…'}
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-white/40 text-sm font-mono">{mm}:{ss}</span>
-            {phase === 'done' && (
-              <button onClick={restart} className="px-4 py-1 rounded-lg border border-white/20 text-white/60 hover:text-white text-sm transition-colors">
-                Run again
-              </button>
-            )}
-          </div>
-        </div>
-        {/* Progress bar */}
-        <div className="max-w-6xl mx-auto mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #D72638, #F5C518)' }}
-          />
-        </div>
+      <div style={{ textAlign: 'center' }}>
+        <h1 style={{
+          fontFamily: 'var(--font-bebas, Impact), sans-serif',
+          fontSize: 'clamp(2.6rem, 8vw, 5rem)', letterSpacing: '0.04em', margin: 0, lineHeight: 0.9,
+          background: 'linear-gradient(120deg, #FFD700 0%, #FF8C00 45%, #FF3A2D 100%)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+        }}>QUINIELA 2026</h1>
+        <p style={{
+          fontFamily: 'var(--font-bebas, Impact), sans-serif',
+          fontSize: 'clamp(0.8rem, 2.5vw, 1.1rem)', letterSpacing: '0.38em',
+          color: 'rgba(255,255,255,0.32)', margin: '0.5rem 0 0',
+        }}>WORLD CUP SIMULATOR · 8 STAGES · 10 PARTICIPANTS</p>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
+      {/* Participant grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))',
+        gap: '0.5rem', width: '100%', maxWidth: '900px',
+      }}>
+        {picks.map(p => (
+          <div key={p.id} style={{
+            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 10, padding: '0.6rem 0.85rem',
+          }}>
+            <div style={{ fontFamily: 'var(--font-bebas, Impact)', color: '#FFD700', fontSize: '1.05rem', letterSpacing: '0.06em' }}>{p.name}</div>
+            <div style={{ display: 'flex', gap: '0.28rem', margin: '0.2rem 0 0.18rem', flexWrap: 'wrap' }}>
+              {[p.team1, p.team2, p.team3, p.team4].map((t, i) => {
+                const tm = TEAM_MAP.get(t)
+                return tm ? <span key={i} title={t} style={{ fontSize: '1.2rem', lineHeight: 1 }}>{tm.flag}</span> : null
+              })}
+            </div>
+            <div style={{ color: 'rgba(255,255,255,0.24)', fontSize: '0.66rem' }}>{p.total_cost} / 230 pts</div>
+          </div>
+        ))}
+      </div>
 
-        {/* ── Left: match feed ─────────────────────────────────────────────────── */}
-        <div>
-          {/* Group standings (shown after R3) */}
-          {standings && (
-            <div
-              style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
-              className="rounded-xl p-4 mb-4 overflow-x-auto"
-            >
-              <p style={{ fontFamily: 'Impact, sans-serif', color: '#F5C518', letterSpacing: '0.1em' }} className="mb-3">GROUP STANDINGS</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {Object.entries(standings).map(([g, table]) => (
-                  <div key={g} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px' }}>
-                    <p className="text-[#F5C518] text-xs font-bold mb-1">Group {g}</p>
-                    {(table as GroupTable[]).map((row, i) => (
-                      <div key={row.team} className="flex items-center justify-between gap-1 py-0.5">
-                        <span style={{ color: i < 2 ? '#4ACA6A' : 'rgba(255,255,255,0.35)', fontSize: '0.7rem' }}>
-                          {i < 2 ? '↑' : '·'} {row.team}
-                        </span>
-                        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>{row.pts}pt</span>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
+      <button onClick={handleClick} style={{
+        fontFamily: 'var(--font-bebas, Impact), sans-serif',
+        fontSize: '1.75rem', letterSpacing: '0.1em',
+        background: 'linear-gradient(135deg, #FFD700, #FF8C00)',
+        color: '#070B1A', border: 'none', borderRadius: 14,
+        padding: '1rem 3.5rem', cursor: 'pointer',
+        boxShadow: '0 0 50px rgba(255,200,0,0.28), 0 6px 28px rgba(0,0,0,0.55)',
+      }}>▶ KICK OFF THE WORLD CUP</button>
+    </div>
+  )
+
+  // ── CHAMPION OVERLAY ──────────────────────────────────────────────────────────
+  const champFlag = champion ? (TEAM_MAP.get(champion)?.flag ?? '🏆') : ''
+
+  // ── ACTIVE ───────────────────────────────────────────────────────────────────
+  return (
+    <div style={{ background: '#070B1A', minHeight: 'calc(100vh - 3.5rem)' }}>
+
+      {/* Champion overlay */}
+      {champion && stageIdx === 7 && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'rgba(7,11,26,0.96)', backdropFilter: 'blur(14px)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          justifyContent: 'center', gap: '1.25rem', padding: '2rem', textAlign: 'center',
+        }}>
+          <Tunnel size={160} />
+          <div style={{ fontSize: '3.5rem', lineHeight: 1 }}>{champFlag}</div>
+          <div>
+            <div style={{
+              fontFamily: 'var(--font-bebas, Impact)',
+              fontSize: 'clamp(2.4rem, 9vw, 5.5rem)', lineHeight: 0.85, letterSpacing: '0.04em',
+              background: 'linear-gradient(120deg, #FFD700, #FF8C00)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>{champion.toUpperCase()}</div>
+            <div style={{
+              fontFamily: 'var(--font-bebas, Impact)',
+              fontSize: 'clamp(0.85rem, 2.5vw, 1.25rem)', letterSpacing: '0.32em', color: '#FFD700',
+              marginTop: '0.3rem',
+            }}>2026 WORLD CUP CHAMPION</div>
+          </div>
+
+          {ranked[0] && (
+            <div style={{
+              background: 'rgba(255,215,0,0.07)', border: '1px solid rgba(255,215,0,0.18)',
+              borderRadius: 12, padding: '0.8rem 1.6rem', width: '100%', maxWidth: '340px',
+            }}>
+              <div style={{ color: 'rgba(255,255,255,0.38)', fontSize: '0.62rem', letterSpacing: '0.22em', marginBottom: '0.55rem' }}>QUINIELA PODIUM</div>
+              {ranked.slice(0, 3).map((r, i) => (
+                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.22rem 0' }}>
+                  <span style={{ fontFamily: 'var(--font-bebas, Impact)', color: i === 0 ? '#FFD700' : 'rgba(255,255,255,0.52)', fontSize: '1.05rem' }}>
+                    {['🥇', '🥈', '🥉'][i]} {r.name}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-bebas, Impact)', color: i === 0 ? '#FFD700' : 'rgba(255,255,255,0.38)', fontSize: '1.05rem' }}>
+                    {r.pts.toLocaleString()}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Match feed */}
-          <div ref={feedRef} className="space-y-1.5">
-            {feed.length === 0 && phase === 'running' && (
-              <div className="text-center text-white/30 py-12 text-sm">Waiting for kick-off…</div>
-            )}
-            {feed.map((m, idx) => {
-              const hWin = m.home_score > m.away_score
-              const aWin = m.away_score > m.home_score
-              const isNew = idx === 0
-              const stageLabel = STAGE_LABELS[m.stage] ?? m.stage
-              const hTeam = TEAM_MAP.get(m.home_team)
-              const aTeam = TEAM_MAP.get(m.away_team)
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    background: isNew
-                      ? 'linear-gradient(145deg, #1A1000, #2A1800)'
-                      : 'linear-gradient(145deg, #0D1F4A, #0A1020)',
-                    border: `1px solid ${isNew ? 'rgba(245,197,24,0.4)' : 'rgba(255,255,255,0.06)'}`,
-                    opacity: Math.max(0.4, 1 - idx * 0.012),
-                    transition: 'all 0.3s ease',
-                  }}
-                  className="rounded-lg px-3 py-2 flex items-center gap-2"
-                >
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded font-bold shrink-0"
-                    style={{
-                      background: m.stage === 'FINAL' ? '#F5C518' : m.stage === 'GROUP_STAGE' ? 'rgba(255,255,255,0.1)' : 'rgba(215,38,56,0.3)',
-                      color: m.stage === 'FINAL' ? '#000' : '#fff',
-                      minWidth: '2.5rem',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {stageLabel}
-                  </span>
+          <button onClick={handleClick} style={{
+            fontFamily: 'var(--font-bebas, Impact)', fontSize: '1.15rem', letterSpacing: '0.16em',
+            background: 'transparent', border: '2px solid rgba(255,255,255,0.2)',
+            color: 'rgba(255,255,255,0.58)', borderRadius: 10,
+            padding: '0.55rem 2rem', cursor: 'pointer', marginTop: '0.25rem',
+          }}>PLAY AGAIN ↺</button>
+        </div>
+      )}
 
-                  {/* Home */}
-                  <div className="flex items-center gap-1 flex-1 justify-end min-w-0">
-                    <span className="text-xs truncate" style={{ color: hWin ? '#fff' : 'rgba(255,255,255,0.5)', fontWeight: hWin ? 700 : 400 }}>
-                      {m.home_team}
-                    </span>
-                    <span style={{ fontSize: '1.2rem' }}>{hTeam?.flag}</span>
-                  </div>
-
-                  {/* Score */}
-                  <div
-                    style={{
-                      fontFamily: 'Impact, sans-serif',
-                      fontSize: '1.1rem',
-                      letterSpacing: '0.1em',
-                      color: isNew ? '#F5C518' : '#fff',
-                      minWidth: '3.5rem',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {m.home_score} – {m.away_score}
-                  </div>
-
-                  {/* Away */}
-                  <div className="flex items-center gap-1 flex-1 justify-start min-w-0">
-                    <span style={{ fontSize: '1.2rem' }}>{aTeam?.flag}</span>
-                    <span className="text-xs truncate" style={{ color: aWin ? '#fff' : 'rgba(255,255,255,0.5)', fontWeight: aWin ? 700 : 400 }}>
-                      {m.away_team}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
+      {/* Sticky stage header */}
+      <div style={{
+        position: 'sticky', top: '3.5rem', zIndex: 30,
+        background: 'rgba(7,11,26,0.94)', backdropFilter: 'blur(18px)',
+        borderBottom: `2px solid ${accent}`,
+      }}>
+        <div style={{
+          maxWidth: '72rem', margin: '0 auto', padding: '0.6rem 1rem',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
+        }}>
+          <div style={{
+            fontFamily: 'var(--font-bebas, Impact)',
+            fontSize: 'clamp(1rem, 3vw, 1.4rem)', letterSpacing: '0.12em', color: accent,
+          }}>{stage?.label}</div>
+          {/* Progress dots */}
+          <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+            {STAGES.map((s, i) => (
+              <div key={i} style={{
+                borderRadius: '50%',
+                width: i === stageIdx ? 10 : 6, height: i === stageIdx ? 10 : 6,
+                background: i <= stageIdx ? s.color : 'rgba(255,255,255,0.14)',
+                transition: 'all 0.3s ease',
+              }} />
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* ── Right: live ranking ───────────────────────────────────────────── */}
-        <div className="lg:sticky lg:top-32 lg:self-start">
-          <div
-            style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
-            className="rounded-xl overflow-hidden"
-          >
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-              <span style={{ fontFamily: 'Impact, sans-serif', color: '#F5C518', letterSpacing: '0.1em' }}>RANKING</span>
-              <span className="text-white/30 text-xs">{feed.length} matches</span>
+      {/* Page content */}
+      <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '1rem' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start">
+
+          {/* ── Left: results ──────────────────────────────────────────────── */}
+          <div>
+            {/* Group standings — shown after Round 3 through R32 */}
+            {standings && stageIdx >= 2 && stageIdx <= 4 && (
+              <div style={{
+                background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 12, padding: '0.9rem', marginBottom: '1rem',
+              }}>
+                <div style={{ fontFamily: 'var(--font-bebas, Impact)', fontSize: '0.9rem', letterSpacing: '0.22em', color: accent, marginBottom: '0.6rem' }}>
+                  GROUP STANDINGS
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                  {Object.entries(standings).map(([g, table]) => (
+                    <div key={g} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 7, padding: '0.42rem 0.55rem' }}>
+                      <div style={{ color: accent, fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.14em', marginBottom: '0.22rem' }}>GROUP {g}</div>
+                      {table.map((row, i) => (
+                        <div key={row.team} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5px 0' }}>
+                          <span style={{ fontSize: '0.63rem', color: i < 2 ? '#00D48A' : 'rgba(255,255,255,0.28)' }}>
+                            {i < 2 ? '↑' : '·'}{' '}{row.team.length > 11 ? row.team.slice(0, 11) + '…' : row.team}
+                          </span>
+                          <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', fontFamily: 'monospace' }}>{row.pts}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Results header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', marginBottom: '0.5rem' }}>
+              <div style={{ width: 3, height: '1.1rem', background: accent, borderRadius: 2, flexShrink: 0 }} />
+              <span style={{ fontFamily: 'var(--font-bebas, Impact)', fontSize: '0.85rem', letterSpacing: '0.22em', color: 'rgba(255,255,255,0.38)' }}>
+                {lastResults.length} MATCHES
+              </span>
             </div>
-            <div className="divide-y divide-white/5">
-              {ranking.length === 0 && (
-                <div className="px-4 py-8 text-center text-white/30 text-sm">Starting…</div>
-              )}
-              {ranking.map((p, i) => {
-                const prev = prevRanks[p.name]
-                const moved = prev !== undefined ? prev - p.rank : 0
-                const isLeader = i === 0
-                const teams = [p.team1, p.team2, p.team3, p.team4].map(t => TEAM_MAP.get(t))
 
-                return (
-                  <div
-                    key={p.id}
-                    style={{
-                      background: isLeader ? 'linear-gradient(145deg, rgba(245,197,24,0.1), rgba(245,197,24,0.05))' : 'transparent',
-                      transition: 'background 0.4s ease',
-                    }}
-                    className="px-4 py-2.5 flex items-center gap-3"
-                  >
-                    {/* Rank */}
-                    <div className="w-6 text-center">
-                      <span style={{ fontFamily: 'Impact, sans-serif', color: isLeader ? '#F5C518' : 'rgba(255,255,255,0.3)', fontSize: '0.95rem' }}>
-                        {i + 1}
+            {isGroup ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {Object.entries(byGroup).sort().map(([g, gms]) => (
+                  <div key={g}>
+                    <div style={{ fontFamily: 'var(--font-bebas, Impact)', fontSize: '0.72rem', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.28)', marginBottom: '0.28rem' }}>{g}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.26rem' }}>
+                      {gms.map(m => <MatchCard key={m.id} m={m} accent={accent} />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.28rem' }}>
+                {lastResults.map(m => <MatchCard key={m.id} m={m} accent={accent} showAdv />)}
+              </div>
+            )}
+          </div>
+
+          {/* ── Right: ranking ─────────────────────────────────────────────── */}
+          <div className="lg:sticky lg:top-28">
+            <div style={{ background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 14, overflow: 'hidden' }}>
+              <div style={{
+                padding: '0.62rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.07)',
+                fontFamily: 'var(--font-bebas, Impact)', fontSize: '0.9rem', letterSpacing: '0.24em', color: accent,
+              }}>RANKING</div>
+              <div>
+                {ranked.map((p, i) => {
+                  const prev = prevRanks[p.name]
+                  const moved = prev !== undefined ? prev - p.rank : 0
+                  const top = i === 0
+                  return (
+                    <div key={p.id} style={{
+                      display: 'flex', alignItems: 'center', gap: '0.42rem',
+                      padding: '0.48rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                      background: top ? `${accent}10` : 'transparent',
+                    }}>
+                      <span style={{ fontFamily: 'var(--font-bebas, Impact)', fontSize: '0.9rem', color: top ? accent : 'rgba(255,255,255,0.26)', width: '1rem', textAlign: 'center', flexShrink: 0 }}>{i + 1}</span>
+                      <span style={{ width: '1.3rem', textAlign: 'center', flexShrink: 0 }}>
+                        {moved > 0
+                          ? <span style={{ color: '#00D48A', fontSize: '0.56rem' }}>▲{moved}</span>
+                          : moved < 0
+                          ? <span style={{ color: '#FF3A2D', fontSize: '0.56rem' }}>▼{Math.abs(moved)}</span>
+                          : <span style={{ color: 'rgba(255,255,255,0.16)', fontSize: '0.56rem' }}>—</span>}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: top ? 700 : 400, color: top ? '#fff' : 'rgba(255,255,255,0.74)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                        <div style={{ display: 'flex', gap: '0.15rem', marginTop: '0.1rem' }}>
+                          {[p.team1, p.team2, p.team3, p.team4].map((t, j) => {
+                            const tm = TEAM_MAP.get(t)
+                            return tm ? <span key={j} title={t} style={{ fontSize: '0.78rem', lineHeight: 1 }}>{tm.flag}</span> : null
+                          })}
+                        </div>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-bebas, Impact)', fontSize: '1rem', color: top ? accent : '#fff', minWidth: '3rem', textAlign: 'right', flexShrink: 0 }}>
+                        {p.pts.toLocaleString()}
                       </span>
                     </div>
-
-                    {/* Move indicator */}
-                    <div className="w-4 text-center text-xs">
-                      {moved > 0 && <span style={{ color: '#4ACA6A' }}>▲</span>}
-                      {moved < 0 && <span style={{ color: '#D72638' }}>▼</span>}
-                      {moved === 0 && <span style={{ color: 'rgba(255,255,255,0.2)' }}>–</span>}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p style={{ color: isLeader ? '#fff' : 'rgba(255,255,255,0.8)', fontWeight: isLeader ? 700 : 400, fontSize: '0.875rem', lineHeight: 1.2 }}>
-                        {p.name}
-                      </p>
-                      <div className="flex gap-1 mt-0.5">
-                        {teams.map((t, j) => t && (
-                          <span key={j} className="text-sm leading-none" title={t.name}>{t.flag}</span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Points */}
-                    <div style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem', color: isLeader ? '#F5C518' : '#fff', minWidth: '4rem', textAlign: 'right' }}>
-                      {p.pts.toLocaleString()}
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
 
+        {/* Next stage CTA */}
+        {stageIdx < 7 && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem 0 1.5rem' }}>
+            <button onClick={handleClick} style={{
+              fontFamily: 'var(--font-bebas, Impact), sans-serif',
+              fontSize: '1.6rem', letterSpacing: '0.11em',
+              background: `linear-gradient(135deg, ${accent}, ${accent}BB)`,
+              color: ctaDark ? '#070B1A' : '#fff',
+              border: 'none', borderRadius: 14, padding: '0.9rem 3rem', cursor: 'pointer',
+              boxShadow: `0 0 40px ${accent}28, 0 4px 22px rgba(0,0,0,0.55)`,
+            }}>{stage?.cta}</button>
+          </div>
+        )}
       </div>
     </div>
   )

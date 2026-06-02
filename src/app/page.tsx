@@ -11,8 +11,8 @@ const TIER_COLORS: Record<Tier, { bg: string; border: string }> = {
 }
 
 const RULES = [
-  { icon: '4️⃣', title: 'Pick 4 Teams', body: 'Choose exactly 4 national teams from the 48 World Cup participants.' },
-  { icon: '💰', title: '230 Point Budget', body: "Each team has a cost based on betting odds. Your 4 teams can't exceed 230 points total." },
+  { icon: '5️⃣', title: 'Pick 5 Teams', body: 'Choose exactly 5 national teams from the 48 World Cup participants.' },
+  { icon: '💰', title: '300 Point Budget', body: "Each team has a cost based on betting odds. Your 5 teams can't exceed 300 points total." },
   { icon: '⭐', title: 'Max 1 Elite Team', body: 'You may only pick one team from the elite tier (France, Spain, England, Brazil…).' },
   { icon: '⚽', title: 'Live Scoring', body: 'Every win, goal, draw, and advancement earns (or costs) you points. Underdogs score more per win.' },
   { icon: '🎯', title: 'Top Scorers', body: 'Optionally pick 3 goal-scorers from your teams. Most combined goals wins the scorer prize.' },
@@ -153,7 +153,7 @@ export default function HomePage() {
                   <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D72638' }}>Tier A<br/><span className="normal-case font-normal opacity-60">80–100 pts</span></th>
                   <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#6A90F0' }}>Tier B<br/><span className="normal-case font-normal opacity-60">55–75 pts</span></th>
                   <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#4ACA6A' }}>Tier C<br/><span className="normal-case font-normal opacity-60">30–50 pts</span></th>
-                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D4A017' }}>Tier D<br/><span className="normal-case font-normal opacity-60">5–25 pts</span></th>
+                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D4A017' }}>Tier D<br/><span className="normal-case font-normal opacity-60">10–25 pts</span></th>
                 </tr>
               </thead>
               <tbody className="px-4">

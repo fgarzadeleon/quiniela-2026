@@ -1,7 +1,102 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { TEAMS, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
 import { Team, Tier } from '@/types'
+
+interface PlayerInfo { id: number; name: string; position: string }
+interface TeamSquad { team: string; players: PlayerInfo[] }
+
+function PlayerSelect({
+  index,
+  value,
+  onChange,
+  squads,
+  otherPicks,
+}: {
+  index: number
+  value: string
+  onChange: (v: string) => void
+  squads: TeamSquad[]
+  otherPicks: string[]
+}) {
+  const [query, setQuery] = useState(value)
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setQuery(value) }, [value])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const allPlayers = squads.flatMap(s => s.players.map(p => ({ ...p, team: s.team })))
+  const filtered = query.length >= 1
+    ? allPlayers.filter(p =>
+        p.name.toLowerCase().includes(query.toLowerCase()) &&
+        !otherPicks.includes(p.name)
+      )
+    : allPlayers.filter(p => !otherPicks.includes(p.name))
+
+  const grouped = squads.map(s => ({
+    team: s.team,
+    players: filtered.filter(p => p.team === s.team),
+  })).filter(g => g.players.length > 0)
+
+  function select(name: string) {
+    onChange(name)
+    setQuery(name)
+    setOpen(false)
+  }
+
+  const POSITION_SHORT: Record<string, string> = {
+    Forward: 'FW', Midfielder: 'MF', Defender: 'DF', Goalkeeper: 'GK',
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        type="text"
+        placeholder={`Scorer ${index + 1} — search player name`}
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+      />
+      {open && (
+        <div
+          className="absolute left-0 right-0 top-full mt-1 rounded-lg overflow-auto z-50 shadow-xl"
+          style={{ background: '#0D1F4A', border: '1px solid rgba(255,255,255,0.15)', maxHeight: '220px' }}
+        >
+          {grouped.length === 0 && (
+            <p className="px-3 py-2 text-white/40 text-sm">No players found</p>
+          )}
+          {grouped.map(g => (
+            <div key={g.team}>
+              <p className="px-3 pt-2 pb-0.5 text-[10px] uppercase tracking-widest text-white/30 font-bold">{g.team}</p>
+              {g.players.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onMouseDown={() => select(p.name)}
+                  className="w-full text-left px-3 py-1.5 text-sm text-white hover:bg-white/10 flex items-center justify-between gap-2"
+                >
+                  <span>{p.name}</span>
+                  <span className="text-[10px] text-white/30 font-mono">{POSITION_SHORT[p.position] ?? p.position}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const DEADLINE = new Date('2026-06-11T16:00:00Z')
 
 const TIER_COLORS: Record<Tier, { bg: string; border: string; label: string }> = {
   A: { bg: '#1A0A0A', border: '#D72638', label: '#D72638' },
@@ -51,15 +146,30 @@ export default function PickForm() {
   const [selected, setSelected] = useState<string[]>([])
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [scorers, setScorers] = useState(['', '', ''])
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [squads, setSquads] = useState<TeamSquad[]>([])
+  const [squadsLoading, setSquadsLoading] = useState(false)
 
   const selectedTeams = useMemo(() =>
     selected.map(n => TEAMS.find(t => t.name === n)!).filter(Boolean),
     [selected]
   )
+
+  useEffect(() => {
+    if (selected.length !== TEAMS_TO_PICK) { setSquads([]); return }
+    let cancelled = false
+    setSquadsLoading(true)
+    fetch(`/api/players?teams=${encodeURIComponent(selected.join(','))}`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled && Array.isArray(data)) setSquads(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSquadsLoading(false) })
+    return () => { cancelled = true }
+  }, [selected])
 
   const totalCost = useMemo(() =>
     selectedTeams.reduce((s, t) => s + t.cost, 0),
@@ -76,7 +186,8 @@ export default function PickForm() {
   const isOverATier = aTierCount > MAX_A_TIER
   const isComplete = selected.length === TEAMS_TO_PICK
 
-  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim()
+  const isClosed = new Date() >= DEADLINE
+  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim() && password.trim().length >= 4 && !isClosed
 
   function toggle(teamName: string) {
     setSelected(prev => {
@@ -107,7 +218,8 @@ export default function PickForm() {
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim() || null,
-          team1: selected[0], team2: selected[1], team3: selected[2], team4: selected[3],
+          team1: selected[0], team2: selected[1], team3: selected[2], team4: selected[3], team5: selected[4],
+          password: password.trim(),
           scorer1: scorers[0].trim() || null,
           scorer2: scorers[1].trim() || null,
           scorer3: scorers[2].trim() || null,
@@ -122,6 +234,22 @@ export default function PickForm() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (isClosed) {
+    return (
+      <div className="text-center py-20 px-4">
+        <div className="text-5xl mb-4">🔒</div>
+        <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '2rem', color: '#D72638' }}>
+          PICKS ARE CLOSED
+        </h2>
+        <p className="text-white/60 mt-3">The tournament has started — submissions are no longer accepted.</p>
+        <a href="/ranking" className="inline-block mt-6 px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest"
+          style={{ background: 'linear-gradient(135deg, #D72638, #8B0A1A)', color: '#fff', fontFamily: 'Impact, sans-serif' }}>
+          View the Ranking →
+        </a>
+      </div>
+    )
   }
 
   if (submitted) {
@@ -142,7 +270,7 @@ export default function PickForm() {
           ))}
         </div>
         <button
-          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setEmail(''); setScorers(['','','']); }}
+          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setEmail(''); setPassword(''); setScorers(['','','']); setSquads([]); }}
           className="mt-8 px-5 py-2 rounded-lg border border-white/20 text-sm text-white/60 hover:text-white hover:border-white/40 transition-colors"
         >
           Submit another entry
@@ -152,9 +280,22 @@ export default function PickForm() {
   }
 
   const tiers: Tier[] = ['A', 'B', 'C', 'D']
+  const daysLeft = Math.ceil((DEADLINE.getTime() - Date.now()) / 86400_000)
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Deadline banner */}
+      <div
+        className="rounded-xl px-4 py-3 mb-5 flex items-center gap-3 text-sm"
+        style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}
+      >
+        <span className="text-xl">⏰</span>
+        <span className="text-white/80">
+          Picks close <strong className="text-[#F5C518]">June 11 at kickoff</strong>
+          {daysLeft > 0 && <> — <strong className="text-white">{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</strong></>}
+        </span>
+      </div>
+
       {/* Budget tracker */}
       <div
         style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
@@ -170,7 +311,7 @@ export default function PickForm() {
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-lg font-bold ${isOverBudget ? 'text-[#D72638]' : totalCost > 200 ? 'text-[#F5C518]' : 'text-white'}`}>
+            <span className={`text-lg font-bold ${isOverBudget ? 'text-[#D72638]' : totalCost > 250 ? 'text-[#F5C518]' : 'text-white'}`}>
               {totalCost}
             </span>
             <span className="text-white/40 text-sm">/ {MAX_BUDGET} pts</span>
@@ -181,7 +322,7 @@ export default function PickForm() {
             className="h-full rounded-full transition-all duration-300"
             style={{
               width: `${budgetPct}%`,
-              background: isOverBudget ? '#D72638' : totalCost > 200 ? '#F5C518' : '#1A6BCC',
+              background: isOverBudget ? '#D72638' : totalCost > 250 ? '#F5C518' : '#1A6BCC',
             }}
           />
         </div>
@@ -238,16 +379,30 @@ export default function PickForm() {
           <p className="text-white/50 text-sm mb-4">
             Pick 3 goalscorers from your teams. Most combined goals wins the scorer prize.
           </p>
+          {squadsLoading && (
+            <p className="text-white/40 text-sm mb-3">Loading squad lists…</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[0, 1, 2].map(i => (
-              <input
-                key={i}
-                type="text"
-                placeholder={`Scorer ${i + 1} name`}
-                value={scorers[i]}
-                onChange={e => setScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
-                className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
-              />
+              squads.length > 0 && !squadsLoading ? (
+                <PlayerSelect
+                  key={i}
+                  index={i}
+                  value={scorers[i]}
+                  onChange={v => setScorers(prev => { const n = [...prev]; n[i] = v; return n })}
+                  squads={squads}
+                  otherPicks={scorers.filter((_, j) => j !== i)}
+                />
+              ) : (
+                <input
+                  key={i}
+                  type="text"
+                  placeholder={`Scorer ${i + 1} name`}
+                  value={scorers[i]}
+                  onChange={e => setScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
+                  className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+                />
+              )
             ))}
           </div>
         </div>
@@ -281,6 +436,19 @@ export default function PickForm() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               placeholder="For notifications"
+              className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="text-white/60 text-sm block mb-1">
+              Password * <span className="text-white/30 font-normal">(to log back in and use your wildcard — min. 4 characters)</span>
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Set a password to log in later and swap teams"
+              required
               className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
             />
           </div>
@@ -332,7 +500,7 @@ export default function PickForm() {
         </button>
 
         <p className="text-white/30 text-xs text-center mt-3">
-          Rules: 4 teams · max {MAX_BUDGET} pts budget · max 1 elite-tier team
+          Rules: 5 teams · max {MAX_BUDGET} pts budget · max 1 elite-tier team
         </p>
       </form>
     </div>

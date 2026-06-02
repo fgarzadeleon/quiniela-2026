@@ -10,11 +10,14 @@ CREATE TABLE IF NOT EXISTS picks (
   team2          TEXT NOT NULL,
   team3          TEXT NOT NULL,
   team4          TEXT NOT NULL,
+  team5          TEXT NOT NULL,
   scorer1        TEXT,
   scorer2        TEXT,
   scorer3        TEXT,
-  total_cost     INTEGER NOT NULL CHECK (total_cost <= 230),
+  total_cost     INTEGER NOT NULL CHECK (total_cost <= 300),
   total_points   FLOAT DEFAULT 0,
+  password_hash  TEXT,
+  wildcard_used  BOOLEAN DEFAULT false,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 

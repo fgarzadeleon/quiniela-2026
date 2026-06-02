@@ -34,17 +34,17 @@ const T = {
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 // ── Seed picks ────────────────────────────────────────────────────────────────
-const SEED: { name: string; team1: string; team2: string; team3: string; team4: string }[] = [
-  { name: 'Fede',    team1: 'Brazil',    team2: 'Colombia',       team3: 'Scotland',       team4: 'Tunisia' },
-  { name: 'Arturo',  team1: 'France',    team2: 'Belgium',        team3: 'Egypt',          team4: 'Qatar' },
-  { name: 'Rodrigo', team1: 'Scotland',  team2: 'Australia',      team3: 'Haiti',          team4: 'Curacao' },
-  { name: 'Elena',   team1: 'Germany',   team2: 'Morocco',        team3: 'Czech Republic', team4: 'New Zealand' },
-  { name: 'Mateo',   team1: 'Argentina', team2: 'Colombia',       team3: 'Ecuador',        team4: 'Panama' },
-  { name: 'Sofía',   team1: 'England',   team2: 'Norway',         team3: 'Sweden',         team4: 'Czech Republic' },
-  { name: 'Pablo',   team1: 'Japan',     team2: 'Senegal',        team3: 'Bosnia',         team4: 'Saudi Arabia' },
-  { name: 'Carmen',  team1: 'Mexico',    team2: 'USA',            team3: 'Canada',         team4: 'Panama' },
-  { name: 'Luisa',   team1: 'Spain',     team2: 'Croatia',        team3: 'South Korea',    team4: 'Iraq' },
-  { name: 'Diego',   team1: 'Portugal',  team2: 'Uruguay',        team3: 'Ghana',          team4: 'Cape Verde' },
+const SEED: { name: string; team1: string; team2: string; team3: string; team4: string; team5: string }[] = [
+  { name: 'Fede',    team1: 'Brazil',    team2: 'Colombia',       team3: 'Scotland',       team4: 'Tunisia',    team5: 'Jordan' },
+  { name: 'Arturo',  team1: 'France',    team2: 'Belgium',        team3: 'Egypt',          team4: 'Qatar',      team5: 'Haiti' },
+  { name: 'Rodrigo', team1: 'Scotland',  team2: 'Australia',      team3: 'Haiti',          team4: 'Curacao',    team5: 'Panama' },
+  { name: 'Elena',   team1: 'Germany',   team2: 'Morocco',        team3: 'Czech Republic', team4: 'New Zealand',team5: 'Iraq' },
+  { name: 'Mateo',   team1: 'Argentina', team2: 'Colombia',       team3: 'Ecuador',        team4: 'Panama',     team5: 'Qatar' },
+  { name: 'Sofía',   team1: 'England',   team2: 'Norway',         team3: 'Sweden',         team4: 'Czech Republic', team5: 'Jordan' },
+  { name: 'Pablo',   team1: 'Japan',     team2: 'Senegal',        team3: 'Bosnia and Herzegovina', team4: 'Saudi Arabia', team5: 'Uzbekistan' },
+  { name: 'Carmen',  team1: 'Mexico',    team2: 'USA',            team3: 'Canada',         team4: 'Panama',     team5: 'Curacao' },
+  { name: 'Luisa',   team1: 'Spain',     team2: 'Croatia',        team3: 'South Korea',    team4: 'Iraq',       team5: 'Haiti' },
+  { name: 'Diego',   team1: 'Portugal',  team2: 'Uruguay',        team3: 'Ghana',          team4: 'Cape Verde', team5: 'Uzbekistan' },
 ]
 
 function makePicks(): Pick[] {
@@ -55,7 +55,7 @@ function makePicks(): Pick[] {
     total_points: 0,
     scorer1: undefined, scorer2: undefined, scorer3: undefined,
     ...s,
-    total_cost: [s.team1, s.team2, s.team3, s.team4]
+    total_cost: [s.team1, s.team2, s.team3, s.team4, s.team5]
       .reduce((sum, t) => sum + (TEAM_MAP.get(t)?.cost ?? 0), 0),
   }))
 }
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
       }
 
       // ── Kick off ──
-      send('init', { picks: picks.map(p => ({ name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost })) })
+      send('init', { picks: picks.map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost })) })
       await sleep(500)
 
       // ── Group stage ──
@@ -122,11 +122,11 @@ export async function GET(req: NextRequest) {
         if (closed) return
         send('stage', { label: `GROUP STAGE · ROUND ${round}`, round })
 
-        const base = new Date('2026-06-11T16:00:00Z').getTime()
+        const base = new Date('2026-06-11T00:00:00Z').getTime()
         const ranges: Record<number, [number, number]> = {
-          1: [base,                   base + 3 * 86400_000],
-          2: [base + 4 * 86400_000,   base + 8 * 86400_000],
-          3: [base + 9 * 86400_000,   base + 20 * 86400_000],
+          1: [base,                    base + 7 * 86400_000],   // Jun 11–17
+          2: [base + 7 * 86400_000,    base + 13 * 86400_000],  // Jun 18–23
+          3: [base + 13 * 86400_000,   base + 20 * 86400_000],  // Jun 24–27
         }
         const [from, to] = ranges[round]
         const pending = store.scheduled('GROUP_STAGE')

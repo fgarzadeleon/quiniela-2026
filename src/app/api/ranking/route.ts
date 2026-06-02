@@ -5,8 +5,11 @@ import { Match, Pick } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
+const DEADLINE = new Date('2026-06-11T16:00:00Z')
+
 export async function GET() {
   const supabase = createServerClient()
+  const tournamentStarted = new Date() >= DEADLINE
 
   const [{ data: picks, error: pe }, { data: matches, error: me }] = await Promise.all([
     supabase.from('picks').select('*'),
@@ -21,9 +24,14 @@ export async function GET() {
     .map(p => ({
       ...p,
       total_points: calculatePickPoints(p, (matches ?? []) as Match[]),
+      // Hide team picks and scorers until tournament starts
+      ...(!tournamentStarted && {
+        team1: null, team2: null, team3: null, team4: null, team5: null,
+        scorer1: null, scorer2: null, scorer3: null,
+      }),
     }))
     .sort((a, b) => b.total_points - a.total_points)
-    .map((p, i) => ({ ...p, rank: i + 1 }))
+    .map((p, i) => ({ ...p, rank: i + 1, password_hash: undefined }))
 
-  return NextResponse.json(ranked)
+  return NextResponse.json({ ranked, tournamentStarted })
 }

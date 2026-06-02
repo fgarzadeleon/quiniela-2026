@@ -3,11 +3,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const links = [
-  { href: '/',         label: 'Home' },
-  { href: '/picks',    label: 'Make Your Pick' },
-  { href: '/ranking',  label: 'Ranking' },
-  { href: '/scores',   label: 'Live Scores' },
-  { href: '/live',     label: '▶ Simulate' },
+  { href: '/',          label: 'Home' },
+  { href: '/picks',     label: 'Make Your Pick' },
+  { href: '/ranking',   label: 'Ranking' },
+  { href: '/scores',    label: 'Live Scores' },
+  { href: '/my-picks',  label: 'My Picks' },
 ]
 
 export default function Navbar() {
@@ -64,7 +64,7 @@ export default function Navbar() {
                   : 'text-white/50 hover:text-white'
               }`}
             >
-              {l.label === 'Home' ? '🏠' : l.label === 'Make Your Pick' ? '✅' : l.label === 'Ranking' ? '🏆' : '⚽'}
+              {l.label === 'Home' ? '🏠' : l.label === 'Make Your Pick' ? '✅' : l.label === 'Ranking' ? '🏆' : l.label === 'My Picks' ? '🃏' : '⚽'}
             </Link>
           ))}
         </div>

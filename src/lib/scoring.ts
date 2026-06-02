@@ -2,7 +2,7 @@ import { Match, Pick } from '@/types'
 import { getTeam, SCORING, STAGE_ORDER } from './teams'
 
 export function calculatePickPoints(pick: Pick, matches: Match[]): number {
-  const teamNames = [pick.team1, pick.team2, pick.team3, pick.team4]
+  const teamNames = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
   let total = 0
 
   for (const teamName of teamNames) {

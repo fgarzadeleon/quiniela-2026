@@ -2,15 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
+import { hashPassword } from '@/lib/auth'
+
+const DEADLINE = new Date('2026-06-11T16:00:00Z')
+
+function sortedKey(teams: string[]) {
+  return [...teams].sort().join('|')
+}
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { name, email, team1, team2, team3, team4, scorer1, scorer2, scorer3, total_cost } = body
+  if (new Date() >= DEADLINE) {
+    return NextResponse.json({ error: 'Submissions closed — the tournament has started!' }, { status: 403 })
+  }
 
-  // Validate
-  const teams = [team1, team2, team3, team4]
+  const body = await req.json()
+  const { name, email, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, password } = body
+
+  const teams = [team1, team2, team3, team4, team5]
   if (!name || teams.some(t => !t)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  }
+  if (!password || password.trim().length < 4) {
+    return NextResponse.json({ error: 'Password must be at least 4 characters' }, { status: 400 })
   }
 
   const teamObjects = teams.map(n => TEAM_MAP.get(n))
@@ -33,15 +46,32 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = createServerClient()
+
+  // Duplicate combo check
+  const { data: existing } = await supabase
+    .from('picks')
+    .select('team1, team2, team3, team4, team5')
+  const newKey = sortedKey(teams)
+  const duplicate = existing?.find(p =>
+    sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey
+  )
+  if (duplicate) {
+    return NextResponse.json({ error: 'These 5 teams were already picked by someone else. Try a different combination!' }, { status: 400 })
+  }
+
+  const password_hash = await hashPassword(password.trim())
+
   const { data, error } = await supabase
     .from('picks')
     .insert({
       name, email: email || null,
-      team1, team2, team3, team4,
+      team1, team2, team3, team4, team5,
       scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
       total_cost: cost,
+      password_hash,
+      wildcard_used: false,
     })
-    .select()
+    .select('id, name, team1, team2, team3, team4, team5, total_cost, wildcard_used, created_at')
     .single()
 
   if (error) {
