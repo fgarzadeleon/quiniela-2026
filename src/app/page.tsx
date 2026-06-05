@@ -10,13 +10,6 @@ const TIER_COLORS: Record<Tier, { bg: string; border: string }> = {
   D: { bg: '#1A1400', border: '#7A5A00' },
 }
 
-const RULES = [
-  { icon: '5️⃣', title: 'Pick 5 Teams', body: 'Choose exactly 5 national teams from the 48 World Cup participants.' },
-  { icon: '💰', title: '300 Point Budget', body: "Each team has a cost based on betting odds. Your 5 teams can't exceed 300 points total." },
-  { icon: '⭐', title: 'Max 1 Elite Team', body: 'You may only pick one team from the elite tier (France, Spain, England, Brazil…).' },
-  { icon: '⚽', title: 'Live Scoring', body: 'Every win, goal, draw, and advancement earns (or costs) you points. Underdogs score more per win.' },
-  { icon: '🎯', title: 'Top Scorers', body: 'Pick 3 goal-scorers from your teams. Most combined goals wins the scorer prize.' },
-]
 
 function ScoringRow({ label, a, b, c, d }: { label: string; a: string; b: string; c: string; d: string }) {
   return (
@@ -134,45 +127,6 @@ export default function HomePage() {
               🏆 View Ranking
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="max-w-5xl mx-auto px-4 py-16">
-        <h2
-          style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', color: '#F5C518', letterSpacing: '0.05em' }}
-          className="text-center mb-10"
-        >
-          HOW IT WORKS
-        </h2>
-        {/* Pick 5 Teams — featured card */}
-        <div
-          className="rounded-xl p-6 mb-4 flex items-center gap-5"
-          style={{ background: 'linear-gradient(135deg, #1A1400, #0D1F4A)', border: '2px solid rgba(245,197,24,0.5)', boxShadow: '0 0 32px rgba(245,197,24,0.08)' }}
-        >
-          <div className="text-5xl shrink-0">5️⃣</div>
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-white font-bold text-lg">Pick 5 Teams</h3>
-              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: '#F5C518', color: '#000' }}>New this year</span>
-            </div>
-            <p className="text-white/60 text-sm leading-relaxed">
-              For the first time, choose <strong className="text-white">5 national teams</strong> from the 48 World Cup participants — up from 4. More teams, more action, more chaos.
-            </p>
-          </div>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {RULES.slice(1).map(r => (
-            <div
-              key={r.title}
-              style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.08)' }}
-              className="rounded-xl p-5"
-            >
-              <div className="text-3xl mb-3">{r.icon}</div>
-              <h3 className="text-white font-bold mb-1">{r.title}</h3>
-              <p className="text-white/50 text-sm leading-relaxed">{r.body}</p>
-            </div>
-          ))}
         </div>
       </section>
 
