@@ -151,8 +151,8 @@ export default function HomePage() {
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
                   <th className="py-3 px-4 text-left text-white/50 text-xs uppercase tracking-wider">Event</th>
-                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D72638' }}>Tier A<br/><span className="normal-case font-normal opacity-60">80–100 pts</span></th>
-                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#6A90F0' }}>Tier B<br/><span className="normal-case font-normal opacity-60">55–75 pts</span></th>
+                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D72638' }}>Tier A<br/><span className="normal-case font-normal opacity-60">85–100 pts</span></th>
+                  <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#6A90F0' }}>Tier B<br/><span className="normal-case font-normal opacity-60">55–80 pts</span></th>
                   <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#4ACA6A' }}>Tier C<br/><span className="normal-case font-normal opacity-60">30–50 pts</span></th>
                   <th className="py-3 px-2 text-center text-xs uppercase tracking-wider" style={{ color: '#D4A017' }}>Tier D<br/><span className="normal-case font-normal opacity-60">10–25 pts</span></th>
                 </tr>

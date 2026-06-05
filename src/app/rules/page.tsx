@@ -66,10 +66,10 @@ export default function RulesPage() {
           <p className="text-white/50 text-sm mb-3">Teams are grouped into 4 tiers based on their World Cup odds. Cheaper teams earn more points when they win — picking underdogs pays off.</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
             {[
-              { tier: 'A', label: 'Elite', cost: '80–100 pts', color: '#D72638' },
-              { tier: 'B', label: 'Strong', cost: '55–75 pts', color: '#6A90F0' },
+              { tier: 'A', label: 'Elite', cost: '85–100 pts', color: '#D72638' },
+              { tier: 'B', label: 'Strong', cost: '55–80 pts', color: '#6A90F0' },
               { tier: 'C', label: 'Mid', cost: '30–50 pts', color: '#4ACA6A' },
-              { tier: 'D', label: 'Underdog', cost: '15–30 pts', color: '#D4A017' },
+              { tier: 'D', label: 'Underdog', cost: '10–25 pts', color: '#D4A017' },
             ].map(t => (
               <div key={t.tier} className="rounded-lg p-3" style={{ border: `1px solid ${t.color}22`, background: `${t.color}11` }}>
                 <div className="font-bold text-lg" style={{ color: t.color }}>Tier {t.tier}</div>
