@@ -68,9 +68,40 @@ export default function HomePage() {
             </span>
           </h1>
 
-          <p className="text-white/60 mt-6 mb-10 text-lg max-w-lg mx-auto">
-            Pick your 5 teams. Stay under budget. Dominate the ranking.
+          <p className="text-white/60 mt-6 text-lg max-w-lg mx-auto">
+            Stay under budget. Dominate the ranking.
           </p>
+
+          {/* Key numbers */}
+          <div className="flex flex-wrap justify-center gap-3 mt-6 mb-10">
+            <div
+              className="flex flex-col items-center px-6 py-3 rounded-2xl"
+              style={{ background: 'rgba(245,197,24,0.12)', border: '2px solid rgba(245,197,24,0.5)' }}
+            >
+              <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '2.5rem', lineHeight: 1, color: '#F5C518' }}>5</span>
+              <span className="text-xs uppercase tracking-widest text-white/60 mt-0.5">Teams</span>
+              <span
+                className="text-[10px] font-bold uppercase tracking-widest mt-1 px-2 py-0.5 rounded-full"
+                style={{ background: '#F5C518', color: '#000' }}
+              >
+                New this year
+              </span>
+            </div>
+            <div
+              className="flex flex-col items-center px-6 py-3 rounded-2xl"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }}
+            >
+              <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '2.5rem', lineHeight: 1, color: '#fff' }}>300</span>
+              <span className="text-xs uppercase tracking-widest text-white/60 mt-0.5">Pt Budget</span>
+            </div>
+            <div
+              className="flex flex-col items-center px-6 py-3 rounded-2xl"
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }}
+            >
+              <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '2.5rem', lineHeight: 1, color: '#fff' }}>1</span>
+              <span className="text-xs uppercase tracking-widest text-white/60 mt-0.5">Wildcard</span>
+            </div>
+          </div>
 
           <CountdownTimer />
 
@@ -114,8 +145,24 @@ export default function HomePage() {
         >
           HOW IT WORKS
         </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {RULES.map(r => (
+        {/* Pick 5 Teams — featured card */}
+        <div
+          className="rounded-xl p-6 mb-4 flex items-center gap-5"
+          style={{ background: 'linear-gradient(135deg, #1A1400, #0D1F4A)', border: '2px solid rgba(245,197,24,0.5)', boxShadow: '0 0 32px rgba(245,197,24,0.08)' }}
+        >
+          <div className="text-5xl shrink-0">5️⃣</div>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-white font-bold text-lg">Pick 5 Teams</h3>
+              <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full" style={{ background: '#F5C518', color: '#000' }}>New this year</span>
+            </div>
+            <p className="text-white/60 text-sm leading-relaxed">
+              For the first time, choose <strong className="text-white">5 national teams</strong> from the 48 World Cup participants — up from 4. More teams, more action, more chaos.
+            </p>
+          </div>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {RULES.slice(1).map(r => (
             <div
               key={r.title}
               style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.08)' }}
