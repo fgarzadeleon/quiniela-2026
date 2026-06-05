@@ -13,8 +13,8 @@ type Host = 'USA' | 'Mexico' | 'Canada'
 
 const QUESTIONS: { key: string; label: string; desc: string; icon: string }[] = [
   { key: 'dirtiest',        label: 'Dirtiest Host',          desc: 'Most yellow and red cards combined across the tournament.',         icon: '🟨🟥' },
-  { key: 'best',            label: 'Best Host',              desc: 'Advances furthest in the tournament. Tiebreaker: final WC ranking.', icon: '🏆' },
-  { key: 'worst',           label: 'Worst Host',             desc: 'Eliminated earliest. Tiebreaker: final WC ranking.',                icon: '📉' },
+  { key: 'best',            label: 'Best Host',              desc: 'Best ranked at end of tournament.',  icon: '🏆' },
+  { key: 'worst',           label: 'Worst Host',             desc: 'Worst ranked at end of tournament.', icon: '📉' },
   { key: 'most_goals_for',  label: 'Most Goals Scored',      desc: 'Which host scores the most goals across all their matches.',         icon: '⚽' },
   { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Which host lets in the most goals across all their matches.',        icon: '🥅' },
 ]

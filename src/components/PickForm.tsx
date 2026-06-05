@@ -150,8 +150,8 @@ function TeamButton({ team, selected, disabled, onClick }: {
 
 const HOST_QUESTIONS = [
   { key: 'dirtiest',           label: 'Dirtiest Host',       desc: 'Most yellow + red cards combined',      icon: '🟨🟥' },
-  { key: 'best',               label: 'Best Host',           desc: 'Goes furthest in the tournament',       icon: '🏆' },
-  { key: 'worst',              label: 'Worst Host',          desc: 'Eliminated earliest',                   icon: '📉' },
+  { key: 'best',               label: 'Best Host',           desc: 'Best ranked at end of tournament',      icon: '🏆' },
+  { key: 'worst',              label: 'Worst Host',          desc: 'Worst ranked at end of tournament',     icon: '📉' },
   { key: 'most_goals_for',     label: 'Most Goals Scored',   desc: 'Most goals across all their matches',   icon: '⚽' },
   { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Lets in most goals across all matches', icon: '🥅' },
 ]
