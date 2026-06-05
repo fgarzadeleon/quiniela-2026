@@ -257,6 +257,7 @@ export default function PickForm() {
       })
 
       setSubmitted(true)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -280,37 +281,56 @@ export default function PickForm() {
     )
   }
 
-  if (submitted) {
-    return (
-      <div className="text-center py-20 px-4">
+  // Success modal — rendered on top of the form (not replacing it)
+  const successModal = submitted && (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
+    >
+      <div
+        className="relative w-full max-w-md rounded-2xl p-8 text-center"
+        style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(245,197,24,0.4)', boxShadow: '0 0 60px rgba(245,197,24,0.15)' }}
+      >
         <div className="text-6xl mb-4">🏆</div>
-        <h2
-          style={{ fontFamily: 'Impact, sans-serif', fontSize: '2rem', color: '#F5C518' }}
-        >
+        <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '2rem', color: '#F5C518', letterSpacing: '0.05em' }}>
           ¡Buena suerte, {name}!
         </h2>
-        <p className="text-white/60 mt-2 mb-6">Your picks are saved. May your teams go far.</p>
-        <div className="flex flex-wrap justify-center gap-3">
+        <p className="text-white/60 mt-2 mb-6 text-sm">Your picks are locked in. May your teams go far.</p>
+
+        <div className="flex flex-wrap justify-center gap-2 mb-6">
           {selectedTeams.map(t => (
-            <div key={t.name} className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/20 text-sm">
+            <div key={t.name} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
+              style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}>
               <span>{t.flag}</span> {t.name}
             </div>
           ))}
         </div>
-        <button
-          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setPassword(''); setScorers(['','','']); setHostAnswers({}); setSquads([]); }}
-          className="mt-8 px-5 py-2 rounded-lg border border-white/20 text-sm text-white/60 hover:text-white hover:border-white/40 transition-colors"
-        >
-          Submit another entry
-        </button>
+
+        <div className="flex flex-col gap-2">
+          <a
+            href="/ranking"
+            className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest"
+            style={{ background: 'linear-gradient(135deg, #D72638, #8B0A1A)', color: '#fff', fontFamily: 'Impact, sans-serif', display: 'block' }}
+          >
+            🏆 View Ranking
+          </a>
+          <a
+            href="/my-picks"
+            className="w-full py-2.5 rounded-xl text-sm text-white/50 hover:text-white border border-white/15 hover:border-white/30 transition-colors block text-center"
+          >
+            🃏 Go to My Picks
+          </a>
+        </div>
       </div>
-    )
-  }
+    </div>
+  )
 
   const tiers: Tier[] = ['A', 'B', 'C', 'D']
   const daysLeft = Math.ceil((DEADLINE.getTime() - Date.now()) / 86400_000)
 
   return (
+    <>
+    {successModal}
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Deadline banner */}
       <div
@@ -573,5 +593,6 @@ export default function PickForm() {
         </p>
       </form>
     </div>
+    </>
   )
 }
