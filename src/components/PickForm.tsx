@@ -3,6 +3,10 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { TEAMS, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
 import { Team, Tier } from '@/types'
 
+function norm(s: string) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
 interface PlayerInfo { id: number; name: string; position: string }
 interface TeamSquad { team: string; players: PlayerInfo[] }
 
@@ -36,7 +40,7 @@ function PlayerSelect({
   const allPlayers = squads.flatMap(s => s.players.map(p => ({ ...p, team: s.team })))
   const filtered = query.length >= 1
     ? allPlayers.filter(p =>
-        p.name.toLowerCase().includes(query.toLowerCase()) &&
+        norm(p.name).includes(norm(query)) &&
         !otherPicks.includes(p.name)
       )
     : allPlayers.filter(p => !otherPicks.includes(p.name))
@@ -72,7 +76,9 @@ function PlayerSelect({
           style={{ background: '#0D1F4A', border: '1px solid rgba(255,255,255,0.15)', maxHeight: '220px' }}
         >
           {grouped.length === 0 && (
-            <p className="px-3 py-2 text-white/40 text-sm">No players found</p>
+            <p className="px-3 py-2 text-white/40 text-sm">
+              No match — just type the name directly and it will be saved.
+            </p>
           )}
           {grouped.map(g => (
             <div key={g.team}>
@@ -145,7 +151,6 @@ function TeamButton({ team, selected, disabled, onClick }: {
 export default function PickForm() {
   const [selected, setSelected] = useState<string[]>([])
   const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [scorers, setScorers] = useState(['', '', ''])
   const [submitting, setSubmitting] = useState(false)
@@ -187,7 +192,8 @@ export default function PickForm() {
   const isComplete = selected.length === TEAMS_TO_PICK
 
   const isClosed = new Date() >= DEADLINE
-  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim() && password.trim().length >= 4 && !isClosed
+  const scorersFilled = scorers.every(s => s.trim().length > 0)
+  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim() && password.trim().length >= 4 && scorersFilled && !isClosed
 
   function toggle(teamName: string) {
     setSelected(prev => {
@@ -217,12 +223,11 @@ export default function PickForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          email: email.trim() || null,
           team1: selected[0], team2: selected[1], team3: selected[2], team4: selected[3], team5: selected[4],
           password: password.trim(),
-          scorer1: scorers[0].trim() || null,
-          scorer2: scorers[1].trim() || null,
-          scorer3: scorers[2].trim() || null,
+          scorer1: scorers[0].trim(),
+          scorer2: scorers[1].trim(),
+          scorer3: scorers[2].trim(),
           total_cost: totalCost,
         }),
       })
@@ -270,7 +275,7 @@ export default function PickForm() {
           ))}
         </div>
         <button
-          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setEmail(''); setPassword(''); setScorers(['','','']); setSquads([]); }}
+          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setPassword(''); setScorers(['','','']); setSquads([]); }}
           className="mt-8 px-5 py-2 rounded-lg border border-white/20 text-sm text-white/60 hover:text-white hover:border-white/40 transition-colors"
         >
           Submit another entry
@@ -374,10 +379,13 @@ export default function PickForm() {
           className="rounded-xl p-5 mb-8"
         >
           <h3 className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem' }}>
-            TOP SCORERS (optional)
+            TOP SCORERS
           </h3>
-          <p className="text-white/50 text-sm mb-4">
+          <p className="text-white/50 text-sm mb-1">
             Pick 3 goalscorers from your teams. Most combined goals wins the scorer prize.
+          </p>
+          <p className="text-white/30 text-xs mb-4">
+            Search by name (accents optional). Not in the list? Just type the name directly.
           </p>
           {squadsLoading && (
             <p className="text-white/40 text-sm mb-3">Loading squad lists…</p>
@@ -430,16 +438,6 @@ export default function PickForm() {
             />
           </div>
           <div>
-            <label className="text-white/60 text-sm block mb-1">Email (optional)</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="For notifications"
-              className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
-            />
-          </div>
-          <div className="sm:col-span-2">
             <label className="text-white/60 text-sm block mb-1">
               Password * <span className="text-white/30 font-normal">(to log back in and use your wildcard — min. 4 characters)</span>
             </label>
@@ -496,7 +494,7 @@ export default function PickForm() {
             letterSpacing: '0.1em',
           }}
         >
-          {submitting ? 'Saving...' : !isComplete ? `Select ${TEAMS_TO_PICK - selected.length} more team${TEAMS_TO_PICK - selected.length !== 1 ? 's' : ''}` : isOverBudget ? 'Over budget' : '⚽ Lock In My Picks'}
+          {submitting ? 'Saving...' : !isComplete ? `Select ${TEAMS_TO_PICK - selected.length} more team${TEAMS_TO_PICK - selected.length !== 1 ? 's' : ''}` : isOverBudget ? 'Over budget' : !scorersFilled ? 'Pick 3 goalscorers above' : '⚽ Lock In My Picks'}
         </button>
 
         <p className="text-white/30 text-xs text-center mt-3">

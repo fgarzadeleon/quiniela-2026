@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { name, email, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, password } = body
+  const { name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, password } = body
 
   const teams = [team1, team2, team3, team4, team5]
   if (!name || teams.some(t => !t)) {
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabase
     .from('picks')
     .insert({
-      name, email: email || null,
+      name,
       team1, team2, team3, team4, team5,
       scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
       total_cost: cost,

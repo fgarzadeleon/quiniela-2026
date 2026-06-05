@@ -15,7 +15,7 @@ const RULES = [
   { icon: '💰', title: '300 Point Budget', body: "Each team has a cost based on betting odds. Your 5 teams can't exceed 300 points total." },
   { icon: '⭐', title: 'Max 1 Elite Team', body: 'You may only pick one team from the elite tier (France, Spain, England, Brazil…).' },
   { icon: '⚽', title: 'Live Scoring', body: 'Every win, goal, draw, and advancement earns (or costs) you points. Underdogs score more per win.' },
-  { icon: '🎯', title: 'Top Scorers', body: 'Optionally pick 3 goal-scorers from your teams. Most combined goals wins the scorer prize.' },
+  { icon: '🎯', title: 'Top Scorers', body: 'Pick 3 goal-scorers from your teams. Most combined goals wins the scorer prize.' },
 ]
 
 function ScoringRow({ label, a, b, c, d }: { label: string; a: string; b: string; c: string; d: string }) {
