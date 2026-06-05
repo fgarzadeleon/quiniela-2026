@@ -21,6 +21,7 @@ export async function GET() {
   }
 
   const ranked = (picks as Pick[])
+    .filter(p => !p.name.toLowerCase().startsWith('test'))
     .map(p => ({
       ...p,
       total_points: calculatePickPoints(p, (matches ?? []) as Match[]),

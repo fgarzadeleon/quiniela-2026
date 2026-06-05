@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
   // Duplicate combo check
   const { data: existing } = await supabase
     .from('picks')
-    .select('team1, team2, team3, team4, team5')
+    .select('name, team1, team2, team3, team4, team5')
   const newKey = sortedKey(teams)
   const duplicate = existing?.find(p =>
+    !p.name.toLowerCase().startsWith('test') &&
     sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey
   )
   if (duplicate) {
