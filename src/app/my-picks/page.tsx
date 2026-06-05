@@ -14,6 +14,7 @@ interface PickData {
   id: string
   name: string
   team1: string; team2: string; team3: string; team4: string; team5: string
+  scorer1?: string; scorer2?: string; scorer3?: string
   total_cost: number
   total_points: number
   wildcard_used: boolean
@@ -32,10 +33,12 @@ export default function MyPicksPage() {
 
   // Pre-deadline edit state
   const [editSelected, setEditSelected] = useState<string[]>([])
+  const [editScorers, setEditScorers] = useState(['', '', ''])
 
   // Post-deadline wildcard state
   const [keepTeams, setKeepTeams] = useState<string[]>([])
   const [newPicks, setNewPicks] = useState<string[]>([])
+  const [wildcardScorers, setWildcardScorers] = useState(['', '', ''])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -74,6 +77,9 @@ export default function MyPicksPage() {
           team1: editSelected[0], team2: editSelected[1], team3: editSelected[2],
           team4: editSelected[3], team5: editSelected[4],
           total_cost,
+          scorer1: editScorers[0].trim() || null,
+          scorer2: editScorers[1].trim() || null,
+          scorer3: editScorers[2].trim() || null,
         }),
       })
       const data = await res.json()
@@ -102,6 +108,9 @@ export default function MyPicksPage() {
           type: 'wildcard',
           keepTeams,
           newTeam1: newPicks[0], newTeam2: newPicks[1], newTeam3: newPicks[2],
+          scorer1: wildcardScorers[0].trim() || null,
+          scorer2: wildcardScorers[1].trim() || null,
+          scorer3: wildcardScorers[2].trim() || null,
         }),
       })
       const data = await res.json()
@@ -228,6 +237,23 @@ export default function MyPicksPage() {
           })}
         </div>
 
+        {/* Scorers */}
+        {(pick.scorer1 || pick.scorer2 || pick.scorer3) && (
+          <div
+            style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+            className="rounded-xl p-5 mb-6"
+          >
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Top scorers</p>
+            <div className="flex flex-wrap gap-2">
+              {[pick.scorer1, pick.scorer2, pick.scorer3].filter(Boolean).map(s => (
+                <span key={s} className="px-3 py-1 rounded-full text-sm text-white bg-white/8 border border-white/15">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!tournamentStarted ? (
           // Pre-deadline: free edits
           <div
@@ -244,8 +270,8 @@ export default function MyPicksPage() {
             <button
               onClick={() => {
                 setError('')
-                const current = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
-                setEditSelected(current)
+                setEditSelected([pick.team1, pick.team2, pick.team3, pick.team4, pick.team5])
+                setEditScorers([pick.scorer1 ?? '', pick.scorer2 ?? '', pick.scorer3 ?? ''])
                 setStage('edit')
               }}
               className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest cursor-pointer"
@@ -278,7 +304,13 @@ export default function MyPicksPage() {
               </div>
             </div>
             <button
-              onClick={() => { setError(''); setKeepTeams([]); setNewPicks([]); setStage('wildcard') }}
+              onClick={() => {
+                setError('')
+                setKeepTeams([])
+                setNewPicks([])
+                setWildcardScorers([pick.scorer1 ?? '', pick.scorer2 ?? '', pick.scorer3 ?? ''])
+                setStage('wildcard')
+              }}
               className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #1B3A8B, #0A1F5C)', border: '1px solid rgba(100,150,255,0.4)', color: '#6A90F0', fontFamily: 'Impact, sans-serif' }}
             >
@@ -367,6 +399,27 @@ export default function MyPicksPage() {
               </div>
             )
           })}
+        </div>
+
+        {/* Scorer edit */}
+        <div
+          style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+          className="rounded-xl p-5 mb-6"
+        >
+          <p className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>TOP SCORERS</p>
+          <p className="text-white/30 text-xs mb-3">Search or type names directly — accents optional.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[0, 1, 2].map(i => (
+              <input
+                key={i}
+                type="text"
+                placeholder={`Scorer ${i + 1}`}
+                value={editScorers[i]}
+                onChange={e => setEditScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
+                className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+              />
+            ))}
+          </div>
         </div>
 
         {error && <p className="text-[#D72638] text-sm mb-4 px-3 py-2 bg-[#D72638]/10 rounded-lg">{error}</p>}
@@ -509,6 +562,27 @@ export default function MyPicksPage() {
             </div>
           </div>
         )}
+
+        {/* Wildcard scorer edit */}
+        <div
+          style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+          className="rounded-xl p-5 mb-6"
+        >
+          <p className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>TOP SCORERS</p>
+          <p className="text-white/30 text-xs mb-3">Update your 3 scorers if your new teams change things.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[0, 1, 2].map(i => (
+              <input
+                key={i}
+                type="text"
+                placeholder={`Scorer ${i + 1}`}
+                value={wildcardScorers[i]}
+                onChange={e => setWildcardScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
+                className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+              />
+            ))}
+          </div>
+        </div>
 
         {error && <p className="text-[#D72638] text-sm mb-4 px-3 py-2 bg-[#D72638]/10 rounded-lg">{error}</p>}
 

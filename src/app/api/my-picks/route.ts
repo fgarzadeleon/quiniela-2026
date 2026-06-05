@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-import { verifyPassword } from '@/lib/auth'
-
 const DEADLINE = new Date('2026-06-11T16:00:00Z')
 const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, wildcard_used, total_points, created_at'
 
@@ -21,8 +19,7 @@ async function authenticate(supabase: ReturnType<typeof createServerClient>, nam
   if (error || !data) return { pick: null, error: 'No entry found with that name' }
   if (!data.password_hash) return { pick: null, error: 'This entry has no password set' }
 
-  const ok = await verifyPassword(password, data.password_hash)
-  if (!ok) return { pick: null, error: 'Wrong password' }
+  if (data.password_hash !== password.trim()) return { pick: null, error: 'Wrong password' }
 
   return { pick: data, error: null }
 }
@@ -120,7 +117,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
   }
 
-  const { keepTeams, newTeam1, newTeam2, newTeam3 } = body
+  const { keepTeams, newTeam1, newTeam2, newTeam3, scorer1, scorer2, scorer3 } = body
   const keepList: string[] = Array.isArray(keepTeams) ? keepTeams : []
   const newTeams = [newTeam1, newTeam2, newTeam3].filter(Boolean)
 
@@ -171,6 +168,7 @@ export async function PATCH(req: NextRequest) {
       team4: allFive[3], team5: allFive[4],
       total_cost: cost,
       wildcard_used: true,
+      scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
     })
     .eq('id', pick.id)
     .select(SAFE_FIELDS)

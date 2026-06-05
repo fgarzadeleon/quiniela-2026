@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-import { hashPassword } from '@/lib/auth'
-
 const DEADLINE = new Date('2026-06-11T16:00:00Z')
 
 function sortedKey(teams: string[]) {
@@ -59,8 +57,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'These 5 teams were already picked by someone else. Try a different combination!' }, { status: 400 })
   }
 
-  const password_hash = await hashPassword(password.trim())
-
   const { data, error } = await supabase
     .from('picks')
     .insert({
@@ -68,7 +64,7 @@ export async function POST(req: NextRequest) {
       team1, team2, team3, team4, team5,
       scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
       total_cost: cost,
-      password_hash,
+      password_hash: password.trim(),
       wildcard_used: false,
     })
     .select('id, name, team1, team2, team3, team4, team5, total_cost, wildcard_used, created_at')
