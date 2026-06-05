@@ -13,6 +13,7 @@ interface RankedPick {
   total_cost: number
   total_points: number
   wildcard_used?: boolean
+  host_bonus?: number
 }
 
 const TIER_FLAG_COLORS: Record<Tier, string> = {
@@ -116,6 +117,9 @@ export default function RankingPage() {
                     <span className="font-bold text-white text-base">{p.name}</span>
                     {p.wildcard_used && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
+                    )}
+                    {(p.host_bonus ?? 0) > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]">🏟️ +{p.host_bonus}pts</span>
                     )}
                   </div>
                   <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', color: i === 0 ? '#F5C518' : '#fff' }}>

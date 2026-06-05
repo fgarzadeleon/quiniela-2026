@@ -6,6 +6,7 @@ const links = [
   { href: '/',          label: 'Home',          icon: '🏠' },
   { href: '/picks',     label: 'Make Your Pick', icon: '✅' },
   { href: '/rules',     label: 'Rules',          icon: '📋' },
+  { href: '/hosts',     label: 'Hosts',          icon: '🏟️' },
   { href: '/ranking',   label: 'Ranking',        icon: '🏆' },
   { href: '/scores',    label: 'Live Scores',    icon: '⚽' },
   { href: '/my-picks',  label: 'My Picks',       icon: '🃏' },
