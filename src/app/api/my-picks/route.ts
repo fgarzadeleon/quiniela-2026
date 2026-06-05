@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
+import { getCurrentRound, getNextRound } from '@/lib/scoring'
 const DEADLINE = new Date('2026-06-11T16:00:00Z')
-const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, wildcard_used, total_points, created_at'
+const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, wildcard_used, wildcard_effective_from, total_points, created_at'
 
 function sortedKey(teams: string[]) {
   return [...teams].sort().join('|')
@@ -163,6 +164,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'These 5 teams were already picked by someone else!' }, { status: 400 })
   }
 
+  const now = new Date()
+  const currentRound = getCurrentRound(now)
+  const nextRound = getNextRound(currentRound)
+  const wildcardEffectiveFrom = nextRound ?? currentRound
+
   const { data: updated, error: updateErr } = await supabase
     .from('picks')
     .update({
@@ -170,6 +176,13 @@ export async function PATCH(req: NextRequest) {
       team4: allFive[3], team5: allFive[4],
       total_cost: cost,
       wildcard_used: true,
+      wildcard_used_at: now.toISOString(),
+      wildcard_effective_from: wildcardEffectiveFrom,
+      wildcard_old_team1: originalTeams[0],
+      wildcard_old_team2: originalTeams[1],
+      wildcard_old_team3: originalTeams[2],
+      wildcard_old_team4: originalTeams[3],
+      wildcard_old_team5: originalTeams[4],
       scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
     })
     .eq('id', pick.id)

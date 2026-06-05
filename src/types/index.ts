@@ -27,10 +27,17 @@ export interface Pick {
   team4: string
   team5: string
   scorer1?: string
-  password_hash?: string
-  wildcard_used?: boolean
   scorer2?: string
   scorer3?: string
+  password_hash?: string
+  wildcard_used?: boolean
+  wildcard_used_at?: string
+  wildcard_effective_from?: MatchStage
+  wildcard_old_team1?: string
+  wildcard_old_team2?: string
+  wildcard_old_team3?: string
+  wildcard_old_team4?: string
+  wildcard_old_team5?: string
   total_cost: number
   total_points: number
   created_at: string
