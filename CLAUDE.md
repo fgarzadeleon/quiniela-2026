@@ -86,6 +86,34 @@ One row per player (linked by `pick_id`). Columns: `dirtiest`, `best`, `worst`, 
 ### `matches`
 Populated by the football-data.org sync. Columns: `home_team`, `away_team`, `home_score`, `away_score`, `status`, `stage`, `group_name`.
 
+## Running the Real Tournament (Scoring)
+
+**Important:** The `/scores` page shows live match data fetched from football-data.org (display only). The **ranking scoring** reads from the `matches` Supabase table — these are two separate things. Real results do not automatically flow into the ranking.
+
+To score real matches, update the `matches` table in Supabase as results come in:
+
+```sql
+-- After a real match finishes:
+UPDATE matches
+SET home_score = 2, away_score = 1, status = 'FINISHED'
+WHERE home_team = 'Brazil' AND away_team = 'Mexico';
+```
+
+Or use the **Admin Panel** at `/admin` (password: `ADMIN_PASSWORD` env var, default `quiniela2026`):
+
+| Action | What it does |
+|---|---|
+| `init` | Creates all 96 group stage matches in the DB (run once at start) |
+| `round1/2/3` | Simulates group stage rounds with random scores |
+| `r32/r16/qf/sf/final` | Simulates knockout rounds, auto-generates fixtures from winners |
+| `reset` | Wipes all matches from the DB |
+| `full` | Runs the entire tournament simulation end-to-end |
+
+The simulation uses random scores — useful for testing, not for real scoring. For production, update match scores manually via SQL as results come in.
+
+Knockout match dates hardcoded in `src/app/api/admin/route.ts`:
+- R32: 2026-06-27, R16: 2026-07-03, QF: 2026-07-08, SF: 2026-07-13, Final: 2026-07-19
+
 ## Common Admin SQL Operations
 
 **Reset a player's password:**
@@ -109,6 +137,18 @@ DELETE FROM picks WHERE name ILIKE 'test%';
 ```
 
 **Manually set host challenge answers** (see Hosts Challenge section above).
+
+**Enter a real match result:**
+```sql
+UPDATE matches
+SET home_score = 3, away_score = 1, status = 'FINISHED'
+WHERE home_team = 'France' AND away_team = 'Argentina' AND stage = 'FINAL';
+```
+
+**Check current match table state:**
+```sql
+SELECT home_team, away_team, home_score, away_score, status, stage FROM matches ORDER BY match_date;
+```
 
 ## Test Users
 
@@ -137,7 +177,10 @@ src/
       ranking/route.ts    — GET ranking with scoring + host bonus
       host-predictions/route.ts — POST/GET hosts challenge answers
       players/route.ts    — GET squad lists from football-data.org
-      scores/route.ts     — GET live scores
+      scores/route.ts     — GET live scores from football-data.org (display only, not used for ranking)
+      admin/route.ts      — POST admin actions (init/simulate matches), password-protected
+      admin/matches/route.ts — GET all matches from DB (used by admin panel)
+      simulate-live/route.ts — SSE stream simulating a full tournament in ~5 min (demo/testing)
   components/
     Navbar.tsx            — sticky nav, 7 links
     PickForm.tsx          — full pick submission form with PlayerSelect dropdown
@@ -150,6 +193,24 @@ src/
     simulation.ts         — match simulation logic for demo
   types/index.ts          — Pick, Match, Team, Tier interfaces
 ```
+
+## football-data.org API Notes
+
+- **Rate limit:** 10 requests/minute on the free tier
+- **`/api/scores`** — fetches live match data for display on the `/scores` page. Revalidates every 30s. Does NOT write to the DB.
+- **`/api/players`** — fetches squad lists for the goalscorer picker. Only called when a player has selected all 5 teams.
+- **Team name mapping** — our names differ from football-data.org names. Mapping in `src/app/api/players/route.ts`:
+
+| Our name | football-data.org name |
+|---|---|
+| USA | United States |
+| South Korea | Korea Republic |
+| Ivory Coast | Côte d'Ivoire |
+| Bosnia and Herzegovina | Bosnia-Herzegovina |
+| Czech Republic | Czechia |
+| DR Congo | Congo DR |
+
+If a player's squad is missing or wrong in the scorer picker, check this mapping first.
 
 ## Team Costs
 
