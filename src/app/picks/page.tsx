@@ -27,6 +27,25 @@ export default function PicksPage() {
           Pick at most <strong className="text-white">1 elite-tier team</strong>. Then lock it in.
         </p>
       </div>
+
+      {/* Wildcard explainer */}
+      <div className="max-w-2xl mx-auto px-4 mt-8">
+        <div
+          className="rounded-xl p-5 flex gap-4 items-start"
+          style={{ background: 'linear-gradient(135deg, #1A1200, #0D1F4A)', border: '1px solid rgba(245,197,24,0.3)' }}
+        >
+          <span className="text-3xl shrink-0">🃏</span>
+          <div>
+            <h2 className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem', letterSpacing: '0.05em' }}>
+              WHAT IS THE WILDCARD?
+            </h2>
+            <p className="text-white/70 text-sm leading-relaxed">
+              Once the tournament starts your picks are <strong className="text-white">locked in</strong>. But each player gets <strong className="text-white">one Wildcard</strong> for the entire tournament — use it to swap out <strong className="text-white">3 of your 5 teams</strong> and keep the other 2. Use it whenever you want, but only once. If you&apos;re happy with your picks, you never have to use it.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <PickForm />
     </section>
   )

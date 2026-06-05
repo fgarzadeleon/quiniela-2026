@@ -449,6 +449,9 @@ export default function PickForm() {
               required
               className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
             />
+            <p className="text-white/30 text-xs mt-1">
+              Forgot your password? Message the group admin — they can reset it for you.
+            </p>
           </div>
         </div>
 
