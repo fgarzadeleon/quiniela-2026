@@ -3,6 +3,16 @@ import { useState, useMemo } from 'react'
 import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
 import { Tier } from '@/types'
 
+const HOST_QUESTIONS = [
+  { key: 'dirtiest',           label: 'Dirtiest Host',       desc: 'Most yellow + red cards combined',      icon: '🟨🟥' },
+  { key: 'best',               label: 'Best Host',           desc: 'Best ranked at end of tournament',      icon: '🏆' },
+  { key: 'worst',              label: 'Worst Host',          desc: 'Worst ranked at end of tournament',     icon: '📉' },
+  { key: 'most_goals_for',     label: 'Most Goals Scored',   desc: 'Most goals across all their matches',   icon: '⚽' },
+  { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Lets in most goals across all matches', icon: '🥅' },
+]
+const HOSTS = [{ name: 'USA', flag: '🇺🇸' }, { name: 'Mexico', flag: '🇲🇽' }, { name: 'Canada', flag: '🇨🇦' }]
+type HostAnswers = Record<string, string>
+
 const TIER_COLORS: Record<Tier, { bg: string; border: string; label: string }> = {
   A: { bg: '#1A0A0A', border: '#D72638', label: '#D72638' },
   B: { bg: '#0A0E1A', border: '#2A4AB0', label: '#6A90F0' },
@@ -31,6 +41,10 @@ export default function MyPicksPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Host predictions
+  const [hostPredictions, setHostPredictions] = useState<HostAnswers | null>(null)
+  const [editHostAnswers, setEditHostAnswers] = useState<HostAnswers>({})
+
   // Pre-deadline edit state
   const [editSelected, setEditSelected] = useState<string[]>([])
   const [editScorers, setEditScorers] = useState(['', '', ''])
@@ -54,6 +68,8 @@ export default function MyPicksPage() {
       if (!res.ok) throw new Error(data.error)
       setPick(data)
       setTournamentStarted(data.tournamentStarted ?? false)
+      const hostRes = await fetch(`/api/host-predictions?name=${encodeURIComponent(name.trim())}&password=${encodeURIComponent(password)}`)
+      if (hostRes.ok) setHostPredictions(await hostRes.json())
       setStage('view')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -84,6 +100,14 @@ export default function MyPicksPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+      if (Object.keys(editHostAnswers).length === HOST_QUESTIONS.length) {
+        const hostRes = await fetch('/api/host-predictions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), password, ...editHostAnswers }),
+        })
+        if (hostRes.ok) setHostPredictions(editHostAnswers)
+      }
       setPick(data)
       setStage('view')
     } catch (err: unknown) {
@@ -254,6 +278,32 @@ export default function MyPicksPage() {
           </div>
         )}
 
+        {/* Host predictions */}
+        {hostPredictions && Object.keys(hostPredictions).length > 0 && (
+          <div
+            style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+            className="rounded-xl p-5 mb-6"
+          >
+            <p className="text-white/40 text-xs uppercase tracking-wider mb-3">🏟️ Hosts Challenge</p>
+            <div className="space-y-2">
+              {HOST_QUESTIONS.map(q => {
+                const answer = hostPredictions[q.key]
+                const host = HOSTS.find(h => h.name === answer)
+                return (
+                  <div key={q.key} className="flex items-center justify-between gap-2">
+                    <span className="text-white/60 text-xs">{q.icon} {q.label}</span>
+                    {host ? (
+                      <span className="text-sm font-medium text-white">{host.flag} {host.name}</span>
+                    ) : (
+                      <span className="text-white/30 text-xs">—</span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {!tournamentStarted ? (
           // Pre-deadline: free edits
           <div
@@ -272,6 +322,7 @@ export default function MyPicksPage() {
                 setError('')
                 setEditSelected([pick.team1, pick.team2, pick.team3, pick.team4, pick.team5])
                 setEditScorers([pick.scorer1 ?? '', pick.scorer2 ?? '', pick.scorer3 ?? ''])
+                setEditHostAnswers(hostPredictions ?? {})
                 setStage('edit')
               }}
               className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest cursor-pointer"
@@ -418,6 +469,39 @@ export default function MyPicksPage() {
                 onChange={e => setEditScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
                 className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
               />
+            ))}
+          </div>
+        </div>
+
+        {/* Host predictions editor */}
+        <div
+          style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+          className="rounded-xl p-5 mb-6"
+        >
+          <p className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>🏟️ HOSTS CHALLENGE</p>
+          <p className="text-white/30 text-xs mb-4">For each question, which host nation (USA, Mexico, Canada)?</p>
+          <div className="space-y-4">
+            {HOST_QUESTIONS.map(q => (
+              <div key={q.key}>
+                <p className="text-white/70 text-xs mb-2">{q.icon} {q.label} <span className="text-white/30">— {q.desc}</span></p>
+                <div className="flex gap-2">
+                  {HOSTS.map(h => (
+                    <button
+                      key={h.name}
+                      type="button"
+                      onClick={() => setEditHostAnswers(prev => ({ ...prev, [q.key]: h.name }))}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer"
+                      style={{
+                        background: editHostAnswers[q.key] === h.name ? 'rgba(245,197,24,0.2)' : 'rgba(255,255,255,0.05)',
+                        border: editHostAnswers[q.key] === h.name ? '2px solid #F5C518' : '1px solid rgba(255,255,255,0.1)',
+                        color: editHostAnswers[q.key] === h.name ? '#F5C518' : '#fff',
+                      }}
+                    >
+                      {h.flag} {h.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
