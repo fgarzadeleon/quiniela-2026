@@ -148,11 +148,25 @@ function TeamButton({ team, selected, disabled, onClick }: {
   )
 }
 
+const HOST_QUESTIONS = [
+  { key: 'dirtiest',           label: 'Dirtiest Host',       desc: 'Most yellow + red cards combined',      icon: '🟨🟥' },
+  { key: 'best',               label: 'Best Host',           desc: 'Goes furthest in the tournament',       icon: '🏆' },
+  { key: 'worst',              label: 'Worst Host',          desc: 'Eliminated earliest',                   icon: '📉' },
+  { key: 'most_goals_for',     label: 'Most Goals Scored',   desc: 'Most goals across all their matches',   icon: '⚽' },
+  { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Lets in most goals across all matches', icon: '🥅' },
+]
+const HOSTS = [
+  { name: 'USA',    flag: '🇺🇸' },
+  { name: 'Mexico', flag: '🇲🇽' },
+  { name: 'Canada', flag: '🇨🇦' },
+]
+
 export default function PickForm() {
   const [selected, setSelected] = useState<string[]>([])
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
   const [scorers, setScorers] = useState(['', '', ''])
+  const [hostAnswers, setHostAnswers] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
@@ -193,7 +207,8 @@ export default function PickForm() {
 
   const isClosed = new Date() >= DEADLINE
   const scorersFilled = scorers.every(s => s.trim().length > 0)
-  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim() && password.trim().length >= 4 && scorersFilled && !isClosed
+  const hostFilled = HOST_QUESTIONS.every(q => hostAnswers[q.key])
+  const canSubmit = isComplete && !isOverBudget && !isOverATier && name.trim() && password.trim().length >= 4 && scorersFilled && hostFilled && !isClosed
 
   function toggle(teamName: string) {
     setSelected(prev => {
@@ -233,6 +248,14 @@ export default function PickForm() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Submission failed')
+
+      // Submit host predictions (picks must exist first for FK)
+      await fetch('/api/host-predictions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), password: password.trim(), ...hostAnswers }),
+      })
+
       setSubmitted(true)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -275,7 +298,7 @@ export default function PickForm() {
           ))}
         </div>
         <button
-          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setPassword(''); setScorers(['','','']); setSquads([]); }}
+          onClick={() => { setSubmitted(false); setSelected([]); setName(''); setPassword(''); setScorers(['','','']); setHostAnswers({}); setSquads([]); }}
           className="mt-8 px-5 py-2 rounded-lg border border-white/20 text-sm text-white/60 hover:text-white hover:border-white/40 transition-colors"
         >
           Submit another entry
@@ -416,6 +439,51 @@ export default function PickForm() {
         </div>
       )}
 
+      {/* Hosts Challenge */}
+      {isComplete && (
+        <div
+          style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
+          className="rounded-xl p-5 mb-8"
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xl">🏟️</span>
+            <h3 className="text-[#F5C518] font-bold" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem' }}>
+              HOSTS CHALLENGE
+            </h3>
+          </div>
+          <p className="text-white/50 text-sm mb-1">5 questions about the host nations. Each correct answer = <strong className="text-white">100 bonus points</strong>.</p>
+          <p className="text-white/30 text-xs mb-5">Tiebreaker for all questions: final World Cup ranking.</p>
+          <div className="space-y-4">
+            {HOST_QUESTIONS.map(q => (
+              <div key={q.key}>
+                <p className="text-white/70 text-sm font-medium mb-1">{q.icon} {q.label} <span className="text-white/30 font-normal">— {q.desc}</span></p>
+                <div className="grid grid-cols-3 gap-2">
+                  {HOSTS.map(h => {
+                    const selected = hostAnswers[q.key] === h.name
+                    return (
+                      <button
+                        key={h.name}
+                        type="button"
+                        onClick={() => setHostAnswers(prev => ({ ...prev, [q.key]: h.name }))}
+                        className="flex flex-col items-center gap-1 py-2.5 rounded-xl transition-all duration-150 cursor-pointer"
+                        style={{
+                          background: selected ? 'rgba(245,197,24,0.15)' : 'rgba(255,255,255,0.04)',
+                          border: selected ? '2px solid #F5C518' : '1px solid rgba(255,255,255,0.1)',
+                          boxShadow: selected ? '0 0 12px rgba(245,197,24,0.15)' : 'none',
+                        }}
+                      >
+                        <span className="text-2xl">{h.flag}</span>
+                        <span className="text-xs font-bold" style={{ color: selected ? '#F5C518' : 'rgba(255,255,255,0.6)' }}>{h.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Submission form */}
       <form
         onSubmit={handleSubmit}
@@ -497,7 +565,7 @@ export default function PickForm() {
             letterSpacing: '0.1em',
           }}
         >
-          {submitting ? 'Saving...' : !isComplete ? `Select ${TEAMS_TO_PICK - selected.length} more team${TEAMS_TO_PICK - selected.length !== 1 ? 's' : ''}` : isOverBudget ? 'Over budget' : !scorersFilled ? 'Pick 3 goalscorers above' : '⚽ Lock In My Picks'}
+          {submitting ? 'Saving...' : !isComplete ? `Select ${TEAMS_TO_PICK - selected.length} more team${TEAMS_TO_PICK - selected.length !== 1 ? 's' : ''}` : isOverBudget ? 'Over budget' : !scorersFilled ? 'Pick 3 goalscorers above' : !hostFilled ? `Answer ${HOST_QUESTIONS.filter(q => !hostAnswers[q.key]).length} hosts question${HOST_QUESTIONS.filter(q => !hostAnswers[q.key]).length !== 1 ? 's' : ''} above` : '⚽ Lock In My Picks'}
         </button>
 
         <p className="text-white/30 text-xs text-center mt-3">
