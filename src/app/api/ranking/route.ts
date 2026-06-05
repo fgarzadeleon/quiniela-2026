@@ -31,7 +31,11 @@ export async function GET() {
       }),
     }))
     .sort((a, b) => b.total_points - a.total_points)
-    .map((p, i) => ({ ...p, rank: i + 1, password_hash: undefined }))
+    .map((p, i) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { password_hash, email, ...safe } = p
+      return { ...safe, rank: i + 1 }
+    })
 
   return NextResponse.json({ ranked, tournamentStarted })
 }

@@ -9,7 +9,7 @@ import type { Match, Pick } from '@/types'
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface TeamRecord { team: string; pts: number; gd: number; gf: number; group: string; played: number }
-interface RankEntry { id: string; name: string; team1: string; team2: string; team3: string; team4: string; total_cost: number; pts: number; rank: number }
+interface RankEntry { id: string; name: string; team1: string; team2: string; team3: string; team4: string; team5: string; total_cost: number; pts: number; rank: number }
 
 // ── Seed picks ────────────────────────────────────────────────────────────────
 
@@ -182,7 +182,7 @@ export default function LivePage() {
   function calcRanking(): RankEntry[] {
     const fin = matches.filter(m => m.status === 'FINISHED')
     return picks
-      .map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost, pts: calculatePickPoints(p, fin), rank: 0 }))
+      .map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, team5: p.team5, total_cost: p.total_cost, pts: calculatePickPoints(p, fin), rank: 0 }))
       .sort((a, b) => b.pts - a.pts)
       .map((p, i) => ({ ...p, rank: i + 1 }))
   }

@@ -83,7 +83,7 @@ export default function RulesPage() {
         <Section title="3. TOP SCORERS">
           <ul className="space-y-2">
             <Rule>Along with your teams, you must pick <strong className="text-white">3 goalscorers</strong> — players you think will score the most goals in the tournament.</Rule>
-            <Rule>Your scorers must come from your 5 selected teams.</Rule>
+            <Rule>Your scorers should come from your 5 selected teams — the player list is pre-filtered to your squad, but you can type any name freely.</Rule>
             <Rule>The player with the most combined goals from their 3 picks wins the <strong className="text-white">Top Scorer prize</strong>.</Rule>
             <Rule>You can update your scorers any time before kick-off, and again when you use your Wildcard.</Rule>
           </ul>

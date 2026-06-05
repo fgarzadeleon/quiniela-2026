@@ -372,7 +372,7 @@ export default function PickForm() {
         })}
       </div>
 
-      {/* Scorers (optional) */}
+      {/* Scorers */}
       {isComplete && (
         <div
           style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
