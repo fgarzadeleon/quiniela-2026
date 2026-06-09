@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { TEAMS, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
+import Flag from '@/components/Flag'
 import { Team, Tier } from '@/types'
 
 function norm(s: string) {
@@ -131,7 +132,7 @@ function TeamButton({ team, selected, disabled, onClick }: {
         boxShadow: selected ? `0 0 12px ${colors.border}66` : 'none',
       }}
     >
-      <span className="text-xl leading-none">{team.flag}</span>
+      <Flag code={team.code} name={team.name} size={20} />
       <span className="flex-1 truncate">{team.name}</span>
       <span
         className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -156,9 +157,9 @@ const HOST_QUESTIONS = [
   { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Lets in most goals across all matches', icon: '🥅' },
 ]
 const HOSTS = [
-  { name: 'USA',    flag: '🇺🇸' },
-  { name: 'Mexico', flag: '🇲🇽' },
-  { name: 'Canada', flag: '🇨🇦' },
+  { name: 'USA',    code: 'us' },
+  { name: 'Mexico', code: 'mx' },
+  { name: 'Canada', code: 'ca' },
 ]
 
 export default function PickForm() {
@@ -301,7 +302,7 @@ export default function PickForm() {
           {selectedTeams.map(t => (
             <div key={t.name} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm"
               style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}>
-              <span>{t.flag}</span> {t.name}
+              <Flag code={t.code} name={t.name} size={16} /> {t.name}
             </div>
           ))}
         </div>
@@ -492,7 +493,7 @@ export default function PickForm() {
                           boxShadow: selected ? '0 0 12px rgba(245,197,24,0.15)' : 'none',
                         }}
                       >
-                        <span className="text-2xl">{h.flag}</span>
+                        <Flag code={h.code} name={h.name} size={24} />
                         <span className="text-xs font-bold" style={{ color: selected ? '#F5C518' : 'rgba(255,255,255,0.6)' }}>{h.name}</span>
                       </button>
                     )
@@ -554,7 +555,7 @@ export default function PickForm() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
                   style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}
                 >
-                  {t.flag} {t.name}
+                  <Flag code={t.code} name={t.name} size={16} /> {t.name}
                   <span className="text-white/40 text-xs">{t.cost}pts</span>
                 </div>
               ))}

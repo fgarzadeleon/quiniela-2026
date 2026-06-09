@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
+import Flag from '@/components/Flag'
 import { Tier } from '@/types'
 
 interface RankedPick {
@@ -30,7 +31,7 @@ function TeamPill({ name }: { name: string }) {
       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
       style={{ border: `1px solid ${TIER_FLAG_COLORS[team.tier]}40`, background: `${TIER_FLAG_COLORS[team.tier]}15` }}
     >
-      {team.flag} {team.name}
+      <Flag code={team.code} name={team.name} size={16} /> {team.name}
     </span>
   )
 }

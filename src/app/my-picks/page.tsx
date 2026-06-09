@@ -1,6 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
+import Flag from '@/components/Flag'
 import { Tier } from '@/types'
 
 const HOST_QUESTIONS = [
@@ -10,7 +11,7 @@ const HOST_QUESTIONS = [
   { key: 'most_goals_for',     label: 'Most Goals Scored',   desc: 'Most goals across all their matches',   icon: '⚽' },
   { key: 'most_goals_against', label: 'Most Goals Conceded', desc: 'Lets in most goals across all matches', icon: '🥅' },
 ]
-const HOSTS = [{ name: 'USA', flag: '🇺🇸' }, { name: 'Mexico', flag: '🇲🇽' }, { name: 'Canada', flag: '🇨🇦' }]
+const HOSTS = [{ name: 'USA', code: 'us' }, { name: 'Mexico', code: 'mx' }, { name: 'Canada', code: 'ca' }]
 type HostAnswers = Record<string, string>
 
 const TIER_COLORS: Record<Tier, { bg: string; border: string; label: string }> = {
@@ -250,7 +251,7 @@ export default function MyPicksPage() {
                 className="flex items-center gap-3 px-3 py-2 rounded-lg"
                 style={{ background: colors.bg, border: `1px solid ${colors.border}` }}
               >
-                <span className="text-xl">{t.flag}</span>
+                <Flag code={t.code} name={t.name} size={24} />
                 <span className="flex-1 text-white text-sm font-medium">{t.name}</span>
                 <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: 'rgba(0,0,0,0.4)', color: colors.label }}>
                   Tier {t.tier}
@@ -293,7 +294,7 @@ export default function MyPicksPage() {
                   <div key={q.key} className="flex items-center justify-between gap-2">
                     <span className="text-white/60 text-xs">{q.icon} {q.label}</span>
                     {host ? (
-                      <span className="text-sm font-medium text-white">{host.flag} {host.name}</span>
+                      <span className="text-sm font-medium text-white flex items-center gap-1"><Flag code={host.code} name={host.name} size={16} /> {host.name}</span>
                     ) : (
                       <span className="text-white/30 text-xs">—</span>
                     )}
@@ -439,7 +440,7 @@ export default function MyPicksPage() {
                           boxShadow: sel ? `0 0 10px ${colors.border}55` : 'none',
                         }}
                       >
-                        <span className="text-lg leading-none">{team.flag}</span>
+                        <Flag code={team.code} name={team.name} size={18} />
                         <span className="flex-1 truncate text-xs">{team.name}</span>
                         <span className="text-[10px] font-bold" style={{ color: sel ? '#fff' : colors.label }}>{team.cost}</span>
                         {sel && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#F5C518] text-black text-[10px] flex items-center justify-center font-bold">✓</span>}
@@ -497,7 +498,7 @@ export default function MyPicksPage() {
                         color: editHostAnswers[q.key] === h.name ? '#F5C518' : '#fff',
                       }}
                     >
-                      {h.flag} {h.name}
+                      <Flag code={h.code} name={h.name} size={20} /> {h.name}
                     </button>
                   ))}
                 </div>
@@ -560,7 +561,7 @@ export default function MyPicksPage() {
                     color: locked ? '#fff' : '#ccc',
                   }}
                 >
-                  <span className="text-xl">{t.flag}</span>
+                  <Flag code={t.code} name={t.name} size={24} />
                   <span className="flex-1 text-sm font-medium">{t.name}</span>
                   <span className="text-xs font-mono" style={{ color: locked ? '#fff' : colors.label }}>{t.cost} pts</span>
                   <span className="w-6 h-6 rounded-full border flex items-center justify-center text-xs"
@@ -630,7 +631,7 @@ export default function MyPicksPage() {
                               boxShadow: picked ? `0 0 10px ${colors.border}55` : 'none',
                             }}
                           >
-                            <span className="text-lg leading-none">{team.flag}</span>
+                            <Flag code={team.code} name={team.name} size={18} />
                             <span className="flex-1 truncate text-xs">{team.name}</span>
                             <span className="text-[10px] font-bold" style={{ color: picked ? '#fff' : colors.label }}>{team.cost}</span>
                             {picked && (
@@ -704,7 +705,7 @@ export default function MyPicksPage() {
           {newTeams.map(t => (
             <div key={t.name} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
               style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}>
-              {t.flag} {t.name}
+              <Flag code={t.code} name={t.name} size={18} /> {t.name}
             </div>
           ))}
         </div>

@@ -3,6 +3,7 @@ export type Tier = 'A' | 'B' | 'C' | 'D'
 export interface Team {
   name: string
   flag: string
+  code: string
   cost: number
   tier: Tier
 }

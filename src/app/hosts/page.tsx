@@ -1,12 +1,13 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import Flag from '@/components/Flag'
 
 const DEADLINE = new Date('2026-06-11T16:00:00Z')
 
 const HOSTS = [
-  { name: 'USA',    flag: '🇺🇸' },
-  { name: 'Mexico', flag: '🇲🇽' },
-  { name: 'Canada', flag: '🇨🇦' },
+  { name: 'USA',    code: 'us' },
+  { name: 'Mexico', code: 'mx' },
+  { name: 'Canada', code: 'ca' },
 ] as const
 
 type Host = 'USA' | 'Mexico' | 'Canada'
@@ -102,8 +103,10 @@ export default function HostsPage() {
         <p className="text-white/50 text-sm mt-2 max-w-md mx-auto">
           5 questions about USA, Mexico &amp; Canada. Each correct answer is worth <strong className="text-[#F5C518]">100 points</strong>.
         </p>
-        <div className="flex justify-center gap-4 mt-4 text-2xl">
-          <span>🇺🇸</span><span>🇲🇽</span><span>🇨🇦</span>
+        <div className="flex justify-center gap-4 mt-4">
+          <Flag code="us" name="USA" size={32} />
+          <Flag code="mx" name="Mexico" size={32} />
+          <Flag code="ca" name="Canada" size={32} />
         </div>
       </div>
 
@@ -184,7 +187,7 @@ export default function HostsPage() {
                           boxShadow: selected ? '0 0 16px rgba(245,197,24,0.2)' : 'none',
                         }}
                       >
-                        <span className="text-3xl">{h.flag}</span>
+                        <Flag code={h.code} name={h.name} size={32} />
                         <span className="text-xs font-bold text-white/80">{h.name}</span>
                         {selected && <span className="text-[10px] text-[#F5C518] font-bold">✓ Selected</span>}
                       </button>
@@ -231,7 +234,7 @@ export default function HostsPage() {
                   <div key={q.key} className="flex items-center justify-between px-4 py-2 rounded-lg"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <span className="text-white/60 text-sm">{q.icon} {q.label}</span>
-                    <span className="text-white font-bold text-sm">{host?.flag} {host?.name}</span>
+                    <span className="text-white font-bold text-sm flex items-center gap-1">{host && <Flag code={host.code} name={host.name} size={16} />} {host?.name}</span>
                   </div>
                 )
               })}

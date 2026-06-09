@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import CountdownTimer from '@/components/CountdownTimer'
+import Flag from '@/components/Flag'
 import { TEAMS } from '@/lib/teams'
 import { Tier } from '@/types'
 
@@ -187,7 +188,7 @@ export default function HomePage() {
               style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}
               className="rounded-lg p-3 flex items-center gap-2"
             >
-              <span className="text-2xl">{t.flag}</span>
+              <Flag code={t.code} name={t.name} size={24} />
               <div className="min-w-0">
                 <p className="text-white text-sm font-medium truncate">{t.name}</p>
                 <p className="text-white/40 text-xs">{t.cost} pts · Tier {t.tier}</p>
