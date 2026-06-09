@@ -1,7 +1,8 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } from '@/lib/teams'
 import Flag from '@/components/Flag'
+import PlayerSelect, { TeamSquad } from '@/components/PlayerSelect'
 import { Tier } from '@/types'
 
 const HOST_QUESTIONS = [
@@ -54,6 +55,37 @@ export default function MyPicksPage() {
   const [keepTeams, setKeepTeams] = useState<string[]>([])
   const [newPicks, setNewPicks] = useState<string[]>([])
   const [wildcardScorers, setWildcardScorers] = useState(['', '', ''])
+
+  // Squad data for scorer autocomplete
+  const [editSquads, setEditSquads] = useState<TeamSquad[]>([])
+  const [editSquadsLoading, setEditSquadsLoading] = useState(false)
+  const [wcSquads, setWcSquads] = useState<TeamSquad[]>([])
+  const [wcSquadsLoading, setWcSquadsLoading] = useState(false)
+
+  useEffect(() => {
+    if (editSelected.length !== TEAMS_TO_PICK) { setEditSquads([]); return }
+    let cancelled = false
+    setEditSquadsLoading(true)
+    fetch(`/api/players?teams=${encodeURIComponent(editSelected.join(','))}`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled && Array.isArray(data)) setEditSquads(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setEditSquadsLoading(false) })
+    return () => { cancelled = true }
+  }, [editSelected])
+
+  useEffect(() => {
+    const wcTeams = [...keepTeams, ...newPicks]
+    if (wcTeams.length !== TEAMS_TO_PICK) { setWcSquads([]); return }
+    let cancelled = false
+    setWcSquadsLoading(true)
+    fetch(`/api/players?teams=${encodeURIComponent(wcTeams.join(','))}`)
+      .then(r => r.json())
+      .then(data => { if (!cancelled && Array.isArray(data)) setWcSquads(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setWcSquadsLoading(false) })
+    return () => { cancelled = true }
+  }, [keepTeams, newPicks])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -460,16 +492,28 @@ export default function MyPicksPage() {
         >
           <p className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>TOP SCORERS</p>
           <p className="text-white/30 text-xs mb-3">Search or type names directly — accents optional.</p>
+          {editSquadsLoading && <p className="text-white/40 text-xs mb-3">Loading squad lists…</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[0, 1, 2].map(i => (
-              <input
-                key={i}
-                type="text"
-                placeholder={`Scorer ${i + 1}`}
-                value={editScorers[i]}
-                onChange={e => setEditScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
-                className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
-              />
+              editSquads.length > 0 && !editSquadsLoading ? (
+                <PlayerSelect
+                  key={i}
+                  index={i}
+                  value={editScorers[i]}
+                  onChange={v => setEditScorers(prev => { const n = [...prev]; n[i] = v; return n })}
+                  squads={editSquads}
+                  otherPicks={editScorers.filter((_, j) => j !== i)}
+                />
+              ) : (
+                <input
+                  key={i}
+                  type="text"
+                  placeholder={`Scorer ${i + 1}`}
+                  value={editScorers[i]}
+                  onChange={e => setEditScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
+                  className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+                />
+              )
             ))}
           </div>
         </div>
@@ -655,16 +699,28 @@ export default function MyPicksPage() {
         >
           <p className="text-[#F5C518] font-bold mb-1" style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>TOP SCORERS</p>
           <p className="text-white/30 text-xs mb-3">Update your 3 scorers if your new teams change things.</p>
+          {wcSquadsLoading && <p className="text-white/40 text-xs mb-3">Loading squad lists…</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[0, 1, 2].map(i => (
-              <input
-                key={i}
-                type="text"
-                placeholder={`Scorer ${i + 1}`}
-                value={wildcardScorers[i]}
-                onChange={e => setWildcardScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
-                className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
-              />
+              wcSquads.length > 0 && !wcSquadsLoading ? (
+                <PlayerSelect
+                  key={i}
+                  index={i}
+                  value={wildcardScorers[i]}
+                  onChange={v => setWildcardScorers(prev => { const n = [...prev]; n[i] = v; return n })}
+                  squads={wcSquads}
+                  otherPicks={wildcardScorers.filter((_, j) => j !== i)}
+                />
+              ) : (
+                <input
+                  key={i}
+                  type="text"
+                  placeholder={`Scorer ${i + 1}`}
+                  value={wildcardScorers[i]}
+                  onChange={e => setWildcardScorers(prev => { const n = [...prev]; n[i] = e.target.value; return n })}
+                  className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+                />
+              )
             ))}
           </div>
         </div>
