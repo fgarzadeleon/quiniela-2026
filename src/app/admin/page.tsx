@@ -44,7 +44,8 @@ export default function AdminPage() {
     setLoading(action)
     setLog(prev => [...prev, `\n→ ${action}…`])
     try {
-      const res = await fetch('/api/admin', {
+      const url = action === 'sync' ? '/api/admin/sync-scores' : '/api/admin'
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, password }),
@@ -113,7 +114,28 @@ export default function AdminPage() {
       <div className="grid lg:grid-cols-2 gap-8">
         {/* Left: controls */}
         <div className="space-y-4">
-          <h2 className="text-white/70 text-xs uppercase tracking-widest">Tournament Stages</h2>
+
+          {/* Real scores sync */}
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'linear-gradient(145deg, #0A1A0A, #111827)', border: '1px solid rgba(74,202,106,0.25)' }}
+          >
+            <p className="text-[#4ACA6A] text-xs font-bold uppercase tracking-widest mb-1">Real Tournament</p>
+            <p className="text-white/40 text-xs mb-3">
+              Pulls finished results from football-data.org and writes them to the matches table.
+              Run after each match or batch of matches.
+            </p>
+            <button
+              onClick={() => call('sync')}
+              disabled={!!loading}
+              className="w-full py-2.5 rounded-lg text-sm font-bold transition-all hover:scale-[1.01] disabled:opacity-50 cursor-pointer disabled:cursor-wait"
+              style={{ background: 'rgba(74,202,106,0.15)', border: '1px solid rgba(74,202,106,0.4)', color: '#4ACA6A', fontFamily: 'Impact, sans-serif', letterSpacing: '0.05em' }}
+            >
+              {loading === 'sync' ? '…' : '⚡ Sync Real Scores'}
+            </button>
+          </div>
+
+          <h2 className="text-white/70 text-xs uppercase tracking-widest pt-2">Simulation</h2>
 
           {STAGES.map(s => (
             <button
