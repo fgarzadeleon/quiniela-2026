@@ -8,6 +8,7 @@ const links = [
   { href: '/rules',     label: 'Rules',          icon: '📋' },
   { href: '/ranking',   label: 'Ranking',        icon: '🏆' },
   { href: '/scores',    label: 'Live Scores',    icon: '⚽' },
+  { href: '/scorers',   label: 'Scorers',        icon: '👟' },
   { href: '/my-picks',  label: 'My Picks',       icon: '🃏' },
 ]
 
