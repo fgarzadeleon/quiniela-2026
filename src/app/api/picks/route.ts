@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
 function sortedKey(teams: string[]) {
   return [...teams].sort().join('|')

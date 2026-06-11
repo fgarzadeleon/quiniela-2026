@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 
 // 2026 FIFA World Cup kick-off: June 11, 2026 16:00 UTC (first match)
-const WC_START = new Date('2026-06-11T16:00:00Z')
+const WC_START = new Date('2026-06-11T19:00:00Z')
 
 interface TimeLeft {
   days: number

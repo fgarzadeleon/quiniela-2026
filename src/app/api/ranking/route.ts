@@ -5,7 +5,7 @@ import { Match, Pick } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
 export async function GET() {
   const supabase = createServerClient()

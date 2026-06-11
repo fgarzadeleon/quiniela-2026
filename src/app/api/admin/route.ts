@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 const ADMIN_PW = process.env.ADMIN_PASSWORD ?? 'quiniela2026'
 
 async function simRound(supabase: ReturnType<typeof createServerClient>, round: number) {
-  const base = new Date('2026-06-11T16:00:00Z').getTime()
+  const base = new Date('2026-06-11T19:00:00Z').getTime()
   const ranges: Record<number, [Date, Date]> = {
     1: [new Date(base),                   new Date(base + 3 * 86400_000)],
     2: [new Date(base + 4 * 86400_000),   new Date(base + 8 * 86400_000)],

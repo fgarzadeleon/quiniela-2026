@@ -5,7 +5,7 @@ import Flag from '@/components/Flag'
 import PlayerSelect, { TeamSquad } from '@/components/PlayerSelect'
 import { Team, Tier } from '@/types'
 
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
 const TIER_COLORS: Record<Tier, { bg: string; border: string; label: string }> = {
   A: { bg: '#1A0A0A', border: '#D72638', label: '#D72638' },

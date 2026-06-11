@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import Flag from '@/components/Flag'
 
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
 const HOSTS = [
   { name: 'USA',    code: 'us' },

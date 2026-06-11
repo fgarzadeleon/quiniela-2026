@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 const HOSTS = ['USA', 'Mexico', 'Canada'] as const
 const QUESTIONS = ['dirtiest', 'best', 'worst', 'most_goals_for', 'most_goals_against'] as const
 

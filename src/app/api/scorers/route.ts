@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
-const DEADLINE = new Date('2026-06-11T16:00:00Z')
+const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
 // football-data.org team name → our name
 const FD_TO_OURS: Record<string, string> = {
