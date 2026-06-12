@@ -4,12 +4,24 @@
 
 World Cup 2026 pick-em game for a private friend group (~10 players). Live at **quinielalive.live** (hosted on Vercel, code on GitHub at `fgarzadeleon/quiniela-2026`).
 
+## Handover — Current State (as of June 2026)
+
+The tournament started on 2026-06-12. Picks are now locked (deadline passed). Key things a new Claude session needs to know:
+
+- **Ranking reads from football-data.org directly** — not from a Supabase `matches` table. Points are computed on the fly by `src/app/api/ranking/route.ts` which fetches finished matches from the football-data.org API and passes them to `calculatePickPoints()`. The `matches` table in Supabase is only used by the admin simulation (for testing).
+- **Flags use flagcdn.com** — `src/components/Flag.tsx` always fetches `w40/w80` images and uses CSS attributes to scale. Do not use arbitrary sizes like `w32` — those URLs 404.
+- **Goalscorer autocomplete** lives in `src/components/PlayerSelect.tsx` — shared by `PickForm.tsx` and `my-picks/page.tsx`.
+- **Wildcard** is available post-deadline — players keep ≥2 teams and swap the rest. Scoring splits by `wildcard_effective_from` stage so old teams score for earlier rounds.
+- **Host challenge answers** are NULL until admin sets them in the `host_answers` table after the tournament ends.
+- **Payments** tracking at `/admin/payments` — password-protected toggle per player.
+- **Scorers page** at `/scorers` — quiniela scorer prize leaderboard + tournament golden boot from football-data.org.
+
 ## Stack
 
 - **Next.js** (App Router, `force-dynamic` on all API routes)
 - **Supabase** (Postgres, service role key for all server writes)
 - **Tailwind CSS v4** (`@theme inline` in `globals.css` — not the v3 config file)
-- **football-data.org API** for squad data (key in `.env.local`)
+- **football-data.org API** for squad data, live scores, and golden boot (key in `.env.local`)
 
 ## Environment Variables (`.env.local` — never commit)
 
@@ -23,18 +35,14 @@ ADMIN_PASSWORD=quiniela2026
 
 ## Game Rules
 
-- Pick **5 teams** from 48 World Cup participants (new this year — was 4)
+- Pick **5 teams** from 48 World Cup participants
 - **300pt budget** (team costs based on betting odds via log-scale formula)
 - Max **1 Tier A** (elite) team
 - Pick **3 goalscorers** from your selected teams (required, not optional)
 - No two players can have the same combination of 5 teams
-- **Deadline: June 11 2026 at 16:00 UTC** (`new Date('2026-06-11T16:00:00Z')`) — hardcoded in 4 places:
-  - `src/app/api/picks/route.ts`
-  - `src/app/api/my-picks/route.ts`
-  - `src/app/api/ranking/route.ts`
-  - `src/components/PickForm.tsx`
+- **Deadline: 2026-06-11T19:00:00Z** (20:00 BST) — hardcoded in multiple files, search for `DEADLINE` to find all occurrences
 - Before deadline: unlimited free edits to all 5 picks + scorers
-- After deadline: picks locked, one **Wildcard** per player (keep 2, swap 3 teams). Scorers editable with wildcard.
+- After deadline: picks locked, one **Wildcard** per player (keep ≥2, swap the rest). Scorers editable with wildcard.
 
 ## Scoring (per team, per match)
 
@@ -48,13 +56,15 @@ ADMIN_PASSWORD=quiniela2026
 | Round advanced | +120 | +150 | +200 | +250 |
 | Champion | +500 | +500 | +500 | +500 |
 
+Implemented in `src/lib/scoring.ts` → `calculatePickPoints(pick, matches)`.
+
 ## Hosts Challenge (bonus points)
 
-Players can answer 5 questions about USA/Mexico/Canada at `/hosts`. Each correct answer = **100pts** added to ranking total.
+Players can answer 5 questions about USA/Mexico/Canada at `/hosts`. Each correct answer = **100pts** added to ranking total (max 500).
 
-Questions: dirtiest (most cards), best (goes furthest), worst (eliminated first), most goals scored, most goals conceded.
+Questions: dirtiest (most cards), best (goes furthest), worst (eliminated earliest), most goals scored, most goals conceded.
 
-Answers are stored in the `host_answers` table. Set them when results are known:
+Answers stored in `host_answers` table. Set them when results are known:
 
 ```sql
 UPDATE host_answers SET value = 'Mexico' WHERE key = 'dirtiest';
@@ -73,8 +83,12 @@ Main player entries. Key columns:
 - `team1`–`team5` — selected teams
 - `scorer1`–`scorer3` — goalscorer picks
 - `total_cost` — sum of team costs
-- `total_points` — calculated at query time by `calculatePickPoints()` + host bonus
+- `total_points` — legacy column, not used for ranking (ranking computes live)
 - `wildcard_used` — boolean, flipped to true when wildcard is played
+- `wildcard_used_at` — timestamp when wildcard was played
+- `wildcard_effective_from` — stage name (`ROUND_OF_32`, `ROUND_OF_16`, etc.) from which new teams score
+- `wildcard_old_team1`–`wildcard_old_team5` — snapshot of previous teams before wildcard swap
+- `paid` — boolean, whether entry fee has been paid (managed via `/admin/payments`)
 - `email` — legacy column, no longer collected
 
 ### `host_predictions`
@@ -84,35 +98,36 @@ One row per player (linked by `pick_id`). Columns: `dirtiest`, `best`, `worst`, 
 5 rows, one per question key. `value` is NULL until the admin sets it after the tournament.
 
 ### `matches`
-Populated by the football-data.org sync. Columns: `home_team`, `away_team`, `home_score`, `away_score`, `status`, `stage`, `group_name`.
+Used only by the admin simulation feature for testing. The **real ranking does not use this table** — it fetches finished matches from football-data.org directly.
 
-## Running the Real Tournament (Scoring)
+## Ranking — How Points Are Calculated
 
-**Important:** The `/scores` page shows live match data fetched from football-data.org (display only). The **ranking scoring** reads from the `matches` Supabase table — these are two separate things. Real results do not automatically flow into the ranking.
+`GET /api/ranking` does three things in parallel:
+1. Fetches all picks from Supabase
+2. Fetches finished matches from `football-data.org/v4/competitions/WC/matches?status=FINISHED` (cached 60s)
+3. Fetches `host_predictions` and `host_answers` from Supabase
 
-To score real matches, update the `matches` table in Supabase as results come in:
+Points = `calculatePickPoints(pick, finishedMatches)` + host bonus (100pts per correct hosts answer).
 
-```sql
--- After a real match finishes:
-UPDATE matches
-SET home_score = 2, away_score = 1, status = 'FINISHED'
-WHERE home_team = 'Brazil' AND away_team = 'Mexico';
-```
+Team picks and scorers are stripped from the response until `tournamentStarted` (i.e. `new Date() >= DEADLINE`).
 
-Or use the **Admin Panel** at `/admin` (password: `ADMIN_PASSWORD` env var, default `quiniela2026`):
+## Admin Panel (`/admin`)
+
+Password: `ADMIN_PASSWORD` env var (default `quiniela2026`).
+
+### Simulation actions (testing only — do not affect real ranking)
 
 | Action | What it does |
 |---|---|
-| `init` | Creates all 96 group stage matches in the DB (run once at start) |
+| `init` | Creates all 96 group stage fixtures in the `matches` DB table |
 | `round1/2/3` | Simulates group stage rounds with random scores |
 | `r32/r16/qf/sf/final` | Simulates knockout rounds, auto-generates fixtures from winners |
-| `reset` | Wipes all matches from the DB |
-| `full` | Runs the entire tournament simulation end-to-end |
+| `reset` | Wipes all matches from the `matches` table |
+| `full` | Runs entire tournament simulation end-to-end |
 
-The simulation uses random scores — useful for testing, not for real scoring. For production, update match scores manually via SQL as results come in.
+### Real score sync (`/admin` → "Sync Real Scores" button)
 
-Knockout match dates hardcoded in `src/app/api/admin/route.ts`:
-- R32: 2026-06-27, R16: 2026-07-03, QF: 2026-07-08, SF: 2026-07-13, Final: 2026-07-19
+Calls `POST /api/admin/sync-scores` — fetches all finished matches from football-data.org and upserts them into the `matches` table. This is optional because the real ranking doesn't use the `matches` table, but it can be useful for debugging or if you ever want to switch back.
 
 ## Common Admin SQL Operations
 
@@ -136,19 +151,14 @@ SELECT name, team1, team2, team3, team4, team5, total_cost, wildcard_used FROM p
 DELETE FROM picks WHERE name ILIKE 'test%';
 ```
 
+**Find players who haven't answered the hosts questions:**
+```sql
+SELECT p.name FROM picks p
+LEFT JOIN host_predictions hp ON hp.pick_id = p.id
+WHERE hp.pick_id IS NULL AND p.name NOT ILIKE 'test%';
+```
+
 **Manually set host challenge answers** (see Hosts Challenge section above).
-
-**Enter a real match result:**
-```sql
-UPDATE matches
-SET home_score = 3, away_score = 1, status = 'FINISHED'
-WHERE home_team = 'France' AND away_team = 'Argentina' AND stage = 'FINAL';
-```
-
-**Check current match table state:**
-```sql
-SELECT home_team, away_team, home_score, away_score, status, stage FROM matches ORDER BY match_date;
-```
 
 ## Test Users
 
@@ -163,43 +173,56 @@ Use `test1`, `testJorge`, etc. to test wildcards and other features without poll
 ```
 src/
   app/
-    page.tsx              — homepage (hero, rules, scoring table, team preview)
-    picks/page.tsx        — pick submission page
-    rules/page.tsx        — full rules page
-    hosts/page.tsx        — hosts challenge minigame
-    ranking/page.tsx      — live ranking
-    my-picks/page.tsx     — login + edit picks + wildcard UI
-    live/page.tsx         — client-side tournament simulator (demo only)
-    admin/page.tsx        — admin panel (password: ADMIN_PASSWORD env var)
+    page.tsx                    — homepage (hero, rules, scoring table, team preview)
+    picks/page.tsx              — pick submission page
+    rules/page.tsx              — full rules page
+    hosts/page.tsx              — hosts challenge minigame
+    ranking/page.tsx            — live ranking with flag pills
+    scorers/page.tsx            — scorer prize leaderboard + tournament golden boot
+    my-picks/page.tsx           — login + edit picks + wildcard UI
+    live/page.tsx               — client-side tournament simulator (demo only)
+    admin/
+      page.tsx                  — admin panel (simulation + sync buttons)
+      payments/page.tsx         — paid/unpaid tracker per player
     api/
-      picks/route.ts      — POST new pick, GET all picks
-      my-picks/route.ts   — POST login, PATCH edit or wildcard
-      ranking/route.ts    — GET ranking with scoring + host bonus
+      picks/route.ts            — POST new pick, GET all picks
+      my-picks/route.ts         — POST login, PATCH edit or wildcard
+      ranking/route.ts          — GET ranking (fetches live from football-data.org)
+      scores/route.ts           — GET live scores from football-data.org (display only)
+      scorers/route.ts          — GET golden boot + quiniela scorer leaderboard
       host-predictions/route.ts — POST/GET hosts challenge answers
-      players/route.ts    — GET squad lists from football-data.org
-      scores/route.ts     — GET live scores from football-data.org (display only, not used for ranking)
-      admin/route.ts      — POST admin actions (init/simulate matches), password-protected
-      admin/matches/route.ts — GET all matches from DB (used by admin panel)
-      simulate-live/route.ts — SSE stream simulating a full tournament in ~5 min (demo/testing)
+      players/route.ts          — GET squad lists from football-data.org
+      admin/route.ts            — POST simulation actions, password-protected
+      admin/sync-scores/route.ts — POST sync finished matches to `matches` table
+      admin/payments/route.ts   — GET/PATCH payments status
+      admin/matches/route.ts    — GET all matches from DB (used by admin panel display)
+      simulate-live/route.ts    — SSE stream simulating a full tournament in ~5 min (demo)
   components/
-    Navbar.tsx            — sticky nav, 7 links
+    Navbar.tsx            — sticky nav with 8 links
     PickForm.tsx          — full pick submission form with PlayerSelect dropdown
-    CountdownTimer.tsx    — countdown to June 11
+    PlayerSelect.tsx      — goalscorer autocomplete (shared by PickForm and my-picks)
+    Flag.tsx              — flag image (flagcdn.com/w40/{code}.png, CSS-scaled)
+    CountdownTimer.tsx    — countdown to deadline
   lib/
     teams.ts              — TEAMS array, TEAM_MAP, costs, tiers, MAX_BUDGET=300, TEAMS_TO_PICK=5
-    scoring.ts            — calculatePickPoints() function
+    scoring.ts            — calculatePickPoints(), getCurrentRound(), ROUND_STARTS
     supabase.ts           — createServerClient()
     tournament.ts         — group stage match generation
     simulation.ts         — match simulation logic for demo
-  types/index.ts          — Pick, Match, Team, Tier interfaces
+  types/index.ts          — Pick, Match, Team, Tier, MatchStage interfaces
 ```
 
 ## football-data.org API Notes
 
 - **Rate limit:** 10 requests/minute on the free tier
-- **`/api/scores`** — fetches live match data for display on the `/scores` page. Revalidates every 30s. Does NOT write to the DB.
+- **`/api/ranking`** — fetches `WC/matches?status=FINISHED`. Response cached 60s via `next: { revalidate: 60 }`.
+- **`/api/scores`** — fetches live match data for display on `/scores`. Revalidates every 30s. Does NOT write to DB.
+- **`/api/scorers`** — fetches `WC/scorers?limit=50` for the golden boot. Revalidates every 60s.
 - **`/api/players`** — fetches squad lists for the goalscorer picker. Only called when a player has selected all 5 teams.
-- **Team name mapping** — our names differ from football-data.org names. Mapping in `src/app/api/players/route.ts`:
+
+### Team name mapping
+
+Our names differ from football-data.org. Mapping used in `ranking/route.ts`, `admin/sync-scores/route.ts`, and `players/route.ts`:
 
 | Our name | football-data.org name |
 |---|---|
@@ -214,9 +237,9 @@ If a player's squad is missing or wrong in the scorer picker, check this mapping
 
 ## Team Costs
 
-Log-scale formula from betting odds: `cost = round5(-36.2 * log10(decimal_odds) + 124.56)`
+Log-scale formula from betting odds: `cost = round5(-35.64 * log10(avg_decimal_odds) + 126.54)`, min 10.
 
-Costs last updated from OddsChecker on 02/06/2026. To update costs, edit `src/lib/teams.ts` — the `TEAMS` array has all 48 teams with `name`, `flag`, `cost`, and `tier`.
+Costs last updated from OddsChecker (27 bookmakers) on 07/06/2026. To update costs, edit `src/lib/teams.ts` — the `TEAMS` array has all 48 teams with `name`, `flag`, `code`, `cost`, and `tier`.
 
 ## Deployment
 
