@@ -44,7 +44,7 @@ function TeamPointsPill({ name, points, live }: { name: string; points: number; 
       >
         {points > 0 ? '+' : ''}{points}
       </span>
-      {live && <span className="animate-pulse text-[10px] text-red-400 font-bold">▶</span>}
+      {live && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
     </span>
   )
 }
