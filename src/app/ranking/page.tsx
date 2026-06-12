@@ -4,6 +4,8 @@ import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
 import { Tier } from '@/types'
 
+interface ScorerGoal { name: string; goals: number; matched: boolean }
+
 interface RankedPick {
   id: string
   rank: number
@@ -11,6 +13,7 @@ interface RankedPick {
   team1: string | null; team2: string | null; team3: string | null
   team4: string | null; team5: string | null
   scorer1?: string; scorer2?: string; scorer3?: string
+  scorer_goals?: ScorerGoal[]
   total_cost: number
   total_points: number
   wildcard_used?: boolean
@@ -142,9 +145,26 @@ export default function RankingPage() {
                   </div>
                 )}
 
-                {tournamentStarted && (p.scorer1 || p.scorer2 || p.scorer3) && (
-                  <div className="mt-1.5 text-xs text-white/40">
-                    ⚽ {[p.scorer1, p.scorer2, p.scorer3].filter(Boolean).join(' · ')}
+                {tournamentStarted && (p.scorer_goals?.length ?? 0) > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {p.scorer_goals!.map(s => (
+                      <span
+                        key={s.name}
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{
+                          background: s.goals > 0
+                            ? 'rgba(74,202,106,0.15)'
+                            : s.matched
+                            ? 'rgba(255,255,255,0.05)'
+                            : 'rgba(245,158,11,0.12)',
+                          border: `1px solid ${s.goals > 0 ? 'rgba(74,202,106,0.4)' : s.matched ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.35)'}`,
+                          color: s.goals > 0 ? '#4ACA6A' : s.matched ? 'rgba(255,255,255,0.45)' : '#F59E0B',
+                        }}
+                      >
+                        {s.name}{s.goals > 0 && <strong> · {s.goals}⚽</strong>}
+                        {!s.matched && <span className="opacity-60"> · ?</span>}
+                      </span>
+                    ))}
                   </div>
                 )}
               </div>

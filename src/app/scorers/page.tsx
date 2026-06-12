@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
 
-interface ScorerPick { name: string; goals: number }
+interface ScorerPick { name: string; goals: number; matched: boolean }
 interface QuinielaScorerRow { playerName: string; picks: ScorerPick[]; total: number }
 interface TopScorer { name: string; team: string; goals: number; assists: number; penalties: number }
 
@@ -101,13 +101,19 @@ export default function ScorersPage() {
                         <span
                           key={p.name}
                           className="text-xs px-2 py-0.5 rounded-full"
+                          title={!p.matched ? 'Name not found in tournament scorers — possible typo or player hasn\'t scored yet' : undefined}
                           style={{
-                            background: p.goals > 0 ? 'rgba(74,202,106,0.15)' : 'rgba(255,255,255,0.05)',
-                            border: `1px solid ${p.goals > 0 ? 'rgba(74,202,106,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                            color: p.goals > 0 ? '#4ACA6A' : 'rgba(255,255,255,0.5)',
+                            background: p.goals > 0
+                              ? 'rgba(74,202,106,0.15)'
+                              : p.matched
+                              ? 'rgba(255,255,255,0.05)'
+                              : 'rgba(245,158,11,0.12)',
+                            border: `1px solid ${p.goals > 0 ? 'rgba(74,202,106,0.4)' : p.matched ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.35)'}`,
+                            color: p.goals > 0 ? '#4ACA6A' : p.matched ? 'rgba(255,255,255,0.5)' : '#F59E0B',
                           }}
                         >
-                          {p.name} {p.goals > 0 && <strong>· {p.goals}⚽</strong>}
+                          {p.name}{p.goals > 0 && <strong> · {p.goals}⚽</strong>}
+                          {!p.matched && <span className="opacity-60"> · ?</span>}
                         </span>
                       ))}
                     </div>

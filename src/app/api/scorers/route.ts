@@ -21,6 +21,18 @@ function norm(s: string) {
   return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
+function lookupScorer(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
+  const pn = norm(pickName)
+  if (goalsMap.has(pn)) return { goals: goalsMap.get(pn)!, matched: true }
+  const pLast = pn.split(/\s+/).at(-1) ?? ''
+  for (const [fdNorm, goals] of goalsMap) {
+    const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
+    if (pLast.length > 3 && pLast === fdLast) return { goals, matched: true }
+    if (pn.length > 4 && fdNorm.includes(pn)) return { goals, matched: true }
+  }
+  return { goals: 0, matched: false }
+}
+
 export async function GET() {
   const tournamentStarted = new Date() >= DEADLINE
 
@@ -28,7 +40,7 @@ export async function GET() {
 
   if (FD_KEY) {
     try {
-      const res = await fetch(`${FD_BASE}/competitions/WC/scorers?limit=50`, {
+      const res = await fetch(`${FD_BASE}/competitions/WC/scorers?limit=200`, {
         headers: { 'X-Auth-Token': FD_KEY },
         next: { revalidate: 60 },
       })
@@ -69,7 +81,7 @@ export async function GET() {
     .map(p => {
       const scorerPicks = [p.scorer1, p.scorer2, p.scorer3]
         .filter(Boolean)
-        .map(name => ({ name: name!, goals: goalsMap.get(norm(name!)) ?? 0 }))
+        .map(name => ({ name: name!, ...lookupScorer(name!, goalsMap) }))
       return {
         playerName: p.name,
         picks: scorerPicks,

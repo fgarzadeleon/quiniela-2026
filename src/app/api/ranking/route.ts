@@ -9,6 +9,41 @@ const DEADLINE = new Date('2026-06-11T19:00:00Z')
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
 
+function norm(s: string) {
+  return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+// Fuzzy match: exact normalized, last-name match, or FD name contains pick name
+function lookupScorer(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
+  const pn = norm(pickName)
+  if (goalsMap.has(pn)) return { goals: goalsMap.get(pn)!, matched: true }
+  const pLast = pn.split(/\s+/).at(-1) ?? ''
+  for (const [fdNorm, goals] of goalsMap) {
+    const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
+    if (pLast.length > 3 && pLast === fdLast) return { goals, matched: true }
+    if (pn.length > 4 && fdNorm.includes(pn)) return { goals, matched: true }
+  }
+  return { goals: 0, matched: false }
+}
+
+async function fetchScorerGoals(): Promise<Map<string, number>> {
+  if (!FD_KEY) return new Map()
+  try {
+    const res = await fetch(`${FD_BASE}/competitions/WC/scorers?limit=200`, {
+      headers: { 'X-Auth-Token': FD_KEY },
+      next: { revalidate: 60 },
+    })
+    if (!res.ok) return new Map()
+    const { scorers = [] } = await res.json()
+    const map = new Map<string, number>()
+    for (const s of scorers as Array<{ player?: { name?: string }; goals?: number }>) {
+      const name = s.player?.name
+      if (name) map.set(norm(name), s.goals ?? 0)
+    }
+    return map
+  } catch { return new Map() }
+}
+
 const FD_TO_OURS: Record<string, string> = {
   'United States':      'USA',
   'Korea Republic':     'South Korea',
@@ -76,11 +111,13 @@ export async function GET() {
     matches,
     { data: hostPreds },
     { data: hostAnswers },
+    scorerGoals,
   ] = await Promise.all([
     supabase.from('picks').select('*'),
     fetchFinishedMatches(),
     supabase.from('host_predictions').select('pick_id, dirtiest, best, worst, most_goals_for, most_goals_against'),
     supabase.from('host_answers').select('key, value'),
+    fetchScorerGoals(),
   ])
 
   if (pe) {
@@ -100,10 +137,15 @@ export async function GET() {
       const host_bonus = pred
         ? KEYS.reduce((sum, k) => sum + (answers[k] && pred[k] === answers[k] ? 100 : 0), 0)
         : 0
+      const scorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+      const scorer_goals = tournamentStarted
+        ? scorerNames.map(name => ({ name, ...lookupScorer(name, scorerGoals) }))
+        : []
       return {
         ...p,
         host_bonus,
         total_points: calculatePickPoints(p, matches) + host_bonus,
+        scorer_goals,
         ...(!tournamentStarted && {
           team1: null, team2: null, team3: null, team4: null, team5: null,
           scorer1: null, scorer2: null, scorer3: null,
