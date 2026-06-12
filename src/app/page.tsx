@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import CountdownTimer from '@/components/CountdownTimer'
 import Flag from '@/components/Flag'
+import HomeWidgets from '@/components/HomeWidgets'
 import { TEAMS } from '@/lib/teams'
 import { Tier } from '@/types'
 
@@ -130,6 +131,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <HomeWidgets />
 
       {/* Scoring table */}
       <section
