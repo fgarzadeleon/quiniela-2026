@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { calculatePickPoints } from '@/lib/scoring'
+import { calculatePickPoints, calculatePickPointsBreakdown } from '@/lib/scoring'
 import { Match, Pick } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -137,15 +137,13 @@ export async function GET() {
       const host_bonus = pred
         ? KEYS.reduce((sum, k) => sum + (answers[k] && pred[k] === answers[k] ? 100 : 0), 0)
         : 0
-      const scorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
-      const scorer_goals = tournamentStarted
-        ? scorerNames.map(name => ({ name, ...lookupScorer(name, scorerGoals) }))
-        : []
+      const matchPoints = calculatePickPoints(p, matches)
+      const team_points = tournamentStarted ? calculatePickPointsBreakdown(p, matches) : []
       return {
         ...p,
         host_bonus,
-        total_points: calculatePickPoints(p, matches) + host_bonus,
-        scorer_goals,
+        total_points: matchPoints + host_bonus,
+        team_points,
         ...(!tournamentStarted && {
           team1: null, team2: null, team3: null, team4: null, team5: null,
           scorer1: null, scorer2: null, scorer3: null,

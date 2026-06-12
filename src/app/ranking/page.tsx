@@ -2,9 +2,8 @@
 import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
-import { Tier } from '@/types'
 
-interface ScorerGoal { name: string; goals: number; matched: boolean }
+interface TeamPoints { name: string; points: number }
 
 interface RankedPick {
   id: string
@@ -12,29 +11,38 @@ interface RankedPick {
   name: string
   team1: string | null; team2: string | null; team3: string | null
   team4: string | null; team5: string | null
-  scorer1?: string; scorer2?: string; scorer3?: string
-  scorer_goals?: ScorerGoal[]
+  team_points?: TeamPoints[]
   total_cost: number
   total_points: number
   wildcard_used?: boolean
   host_bonus?: number
 }
 
-const TIER_FLAG_COLORS: Record<Tier, string> = {
-  A: '#D72638', B: '#2A4AB0', C: '#1A6A2A', D: '#7A5A00',
-}
-
 const MEDAL = ['🥇', '🥈', '🥉']
 
-function TeamPill({ name }: { name: string }) {
+function TeamPointsPill({ name, points }: { name: string; points: number }) {
   const team = TEAM_MAP.get(name)
-  if (!team) return <span className="text-white/40 text-xs">{name}</span>
+  if (!team) return null
+  const positive = points > 0
+  const negative = points < 0
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-      style={{ border: `1px solid ${TIER_FLAG_COLORS[team.tier]}40`, background: `${TIER_FLAG_COLORS[team.tier]}15` }}
+      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+      style={{
+        background: positive ? 'rgba(74,202,106,0.1)' : negative ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${positive ? 'rgba(74,202,106,0.3)' : negative ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
+      }}
     >
-      <Flag code={team.code} name={team.name} size={16} /> {team.name}
+      <Flag code={team.code} name={team.name} size={16} />
+      <span style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
+        {team.name}
+      </span>
+      <span
+        className="font-bold tabular-nums"
+        style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}
+      >
+        {points > 0 ? '+' : ''}{points}
+      </span>
     </span>
   )
 }
@@ -131,42 +139,19 @@ export default function RankingPage() {
                   </span>
                 </div>
 
-                {tournamentStarted && p.team1 ? (
+                {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean).map(t => (
-                      <TeamPill key={t} name={t!} />
+                    {p.team_points!.map(t => (
+                      <TeamPointsPill key={t.name} name={t.name} points={t.points} />
                     ))}
                   </div>
-                ) : (
+                ) : !tournamentStarted ? (
                   <div className="flex gap-1.5 mt-2">
                     {[1,2,3,4,5].map(n => (
-                      <span key={n} className="inline-block w-16 h-5 rounded-full bg-white/5 border border-white/10" />
+                      <span key={n} className="inline-block w-16 h-5 rounded-lg bg-white/5 border border-white/10" />
                     ))}
                   </div>
-                )}
-
-                {tournamentStarted && (p.scorer_goals?.length ?? 0) > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {p.scorer_goals!.map(s => (
-                      <span
-                        key={s.name}
-                        className="text-xs px-2 py-0.5 rounded-full"
-                        style={{
-                          background: s.goals > 0
-                            ? 'rgba(74,202,106,0.15)'
-                            : s.matched
-                            ? 'rgba(255,255,255,0.05)'
-                            : 'rgba(245,158,11,0.12)',
-                          border: `1px solid ${s.goals > 0 ? 'rgba(74,202,106,0.4)' : s.matched ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.35)'}`,
-                          color: s.goals > 0 ? '#4ACA6A' : s.matched ? 'rgba(255,255,255,0.45)' : '#F59E0B',
-                        }}
-                      >
-                        {s.name}{s.goals > 0 && <strong> · {s.goals}⚽</strong>}
-                        {!s.matched && <span className="opacity-60"> · ?</span>}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                ) : null}
               </div>
 
               <div className="text-right text-xs text-white/30 hidden sm:block">

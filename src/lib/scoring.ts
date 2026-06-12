@@ -25,32 +25,26 @@ export function getNextRound(stage: MatchStage): MatchStage | null {
   return STAGE_ORDER[idx + 1] as MatchStage
 }
 
-export function calculatePickPoints(pick: Pick, matches: Match[]): number {
+// Core computation — returns total and per-team breakdown for current team1-5
+function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: Map<string, number> } {
   const finishedMatches = matches.filter(m => m.status === 'FINISHED')
 
-  // Only apply split scoring if wildcard was used with the new tracking fields
-  const hasWildcardData =
-    pick.wildcard_used &&
-    pick.wildcard_effective_from &&
-    pick.wildcard_old_team1
+  const hasWildcardData = pick.wildcard_used && pick.wildcard_effective_from && pick.wildcard_old_team1
 
   function teamsForStage(stage: string): string[] {
-    if (!hasWildcardData) {
-      return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
-    }
+    if (!hasWildcardData) return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
     const stageIdx = STAGE_ORDER.indexOf(stage)
     const effectiveIdx = STAGE_ORDER.indexOf(pick.wildcard_effective_from!)
-    // Before effective round → use old teams; at or after → use new teams
     if (stageIdx < effectiveIdx) {
-      return [
-        pick.wildcard_old_team1!,
-        pick.wildcard_old_team2!,
-        pick.wildcard_old_team3!,
-        pick.wildcard_old_team4!,
-        pick.wildcard_old_team5!,
-      ]
+      return [pick.wildcard_old_team1!, pick.wildcard_old_team2!, pick.wildcard_old_team3!, pick.wildcard_old_team4!, pick.wildcard_old_team5!]
     }
     return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
+  }
+
+  // Pre-seed byTeam with current teams only (swapped-out wildcard teams not shown)
+  const byTeam = new Map<string, number>()
+  for (const t of [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]) {
+    if (t) byTeam.set(t, 0)
   }
 
   let total = 0
@@ -66,37 +60,51 @@ export function calculatePickPoints(pick: Pick, matches: Match[]): number {
       if (!team) continue
       const scoring = SCORING[team.tier]
 
-      const teamMatches = stageMatches.filter(
-        m => m.home_team === teamName || m.away_team === teamName
-      )
+      const teamMatches = stageMatches.filter(m => m.home_team === teamName || m.away_team === teamName)
       if (teamMatches.length === 0) continue
 
+      let pts = 0
       for (const match of teamMatches) {
         const isHome = match.home_team === teamName
         const goalsFor = isHome ? match.home_score : match.away_score
         const goalsAgainst = isHome ? match.away_score : match.home_score
 
-        if (goalsFor > goalsAgainst) total += scoring.win
-        else if (goalsFor === goalsAgainst) total += scoring.draw
-        else total += scoring.loss
+        if (goalsFor > goalsAgainst) pts += scoring.win
+        else if (goalsFor === goalsAgainst) pts += scoring.draw
+        else pts += scoring.loss
 
-        total += goalsFor * scoring.goalFor
-        total += goalsAgainst * scoring.goalAgainst
+        pts += goalsFor * scoring.goalFor
+        pts += goalsAgainst * scoring.goalAgainst
       }
 
-      // Advancement bonus once per KO stage reached
       if (stage !== 'GROUP_STAGE') {
         if (stage === 'FINAL') {
           const finalMatch = teamMatches[0]
           const isHome = finalMatch.home_team === teamName
           const gf = isHome ? finalMatch.home_score : finalMatch.away_score
           const ga = isHome ? finalMatch.away_score : finalMatch.home_score
-          if (gf > ga) total += scoring.champion
+          if (gf > ga) pts += scoring.champion
         }
-        total += scoring.advanceRound
+        pts += scoring.advanceRound
       }
+
+      total += pts
+      if (byTeam.has(teamName)) byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
     }
   }
 
-  return total
+  return { total, byTeam }
+}
+
+export function calculatePickPoints(pick: Pick, matches: Match[]): number {
+  return computePoints(pick, matches).total
+}
+
+// Returns per-team point contribution for the current team1-5 lineup.
+// For wildcard users, swapped-out teams' earlier points are in the total but not shown per-team.
+export function calculatePickPointsBreakdown(pick: Pick, matches: Match[]): Array<{ name: string; points: number }> {
+  const { byTeam } = computePoints(pick, matches)
+  return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
+    .filter(Boolean)
+    .map(name => ({ name: name!, points: byTeam.get(name!) ?? 0 }))
 }
