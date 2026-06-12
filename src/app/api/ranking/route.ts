@@ -64,41 +64,49 @@ const STAGE_MAP: Record<string, Match['stage']> = {
   FINAL:          'FINAL',
 }
 
-async function fetchFinishedMatches(): Promise<Match[]> {
-  if (!FD_KEY) return []
+const LIVE_STATUSES = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
+const SCOREABLE_STATUSES = new Set([...LIVE_STATUSES, 'FINISHED'])
+
+async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string> }> {
+  if (!FD_KEY) return { matches: [], liveTeams: new Set() }
   try {
-    const res = await fetch(`${FD_BASE}/competitions/WC/matches?status=FINISHED`, {
+    const res = await fetch(`${FD_BASE}/competitions/WC/matches`, {
       headers: { 'X-Auth-Token': FD_KEY },
-      next: { revalidate: 60 },
+      next: { revalidate: 30 },
     })
-    if (!res.ok) return []
+    if (!res.ok) return { matches: [], liveTeams: new Set() }
     const { matches = [] } = await res.json()
-    return (matches as Record<string, unknown>[])
-      .map(m => {
-        const homeTeam = m.homeTeam as Record<string, string>
-        const awayTeam = m.awayTeam as Record<string, string>
-        const score = m.score as Record<string, Record<string, number | null>>
-        const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
-        const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
-        const homeScore = score?.fullTime?.home
-        const awayScore = score?.fullTime?.away
-        const stage = STAGE_MAP[m.stage as string]
-        if (!home || !away || homeScore == null || awayScore == null || !stage) return null
-        return {
-          id: String(m.id),
-          home_team: home,
-          away_team: away,
-          home_score: homeScore,
-          away_score: awayScore,
-          status: 'FINISHED' as Match['status'],
-          match_date: m.utcDate as string,
-          stage,
-          group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
-        } as Match
-      })
-      .filter((m): m is Match => m !== null)
+    const liveTeams = new Set<string>()
+    const result: Match[] = []
+    for (const m of matches as Record<string, unknown>[]) {
+      const fdStatus = m.status as string
+      if (!SCOREABLE_STATUSES.has(fdStatus)) continue
+      const homeTeam = m.homeTeam as Record<string, string>
+      const awayTeam = m.awayTeam as Record<string, string>
+      const score = m.score as Record<string, Record<string, number | null>>
+      const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
+      const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
+      const homeScore = score?.fullTime?.home
+      const awayScore = score?.fullTime?.away
+      const stage = STAGE_MAP[m.stage as string]
+      if (!home || !away || homeScore == null || awayScore == null || !stage) continue
+      const isLive = LIVE_STATUSES.has(fdStatus)
+      if (isLive) { liveTeams.add(home); liveTeams.add(away) }
+      result.push({
+        id: String(m.id),
+        home_team: home,
+        away_team: away,
+        home_score: homeScore,
+        away_score: awayScore,
+        status: isLive ? 'IN_PLAY' : 'FINISHED',
+        match_date: m.utcDate as string,
+        stage,
+        group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
+      } as Match)
+    }
+    return { matches: result, liveTeams }
   } catch {
-    return []
+    return { matches: [], liveTeams: new Set() }
   }
 }
 
@@ -108,13 +116,13 @@ export async function GET() {
 
   const [
     { data: picks, error: pe },
-    matches,
+    { matches, liveTeams },
     { data: hostPreds },
     { data: hostAnswers },
     scorerGoals,
   ] = await Promise.all([
     supabase.from('picks').select('*'),
-    fetchFinishedMatches(),
+    fetchMatches(),
     supabase.from('host_predictions').select('pick_id, dirtiest, best, worst, most_goals_for, most_goals_against'),
     supabase.from('host_answers').select('key, value'),
     fetchScorerGoals(),
@@ -139,11 +147,15 @@ export async function GET() {
         : 0
       const matchPoints = calculatePickPoints(p, matches)
       const team_points = tournamentStarted ? calculatePickPointsBreakdown(p, matches) : []
+      const live_teams = tournamentStarted
+        ? [p.team1, p.team2, p.team3, p.team4, p.team5].filter(t => t && liveTeams.has(t))
+        : []
       return {
         ...p,
         host_bonus,
         total_points: matchPoints + host_bonus,
         team_points,
+        live_teams,
         ...(!tournamentStarted && {
           team1: null, team2: null, team3: null, team4: null, team5: null,
           scorer1: null, scorer2: null, scorer3: null,

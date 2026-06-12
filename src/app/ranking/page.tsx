@@ -12,6 +12,7 @@ interface RankedPick {
   team1: string | null; team2: string | null; team3: string | null
   team4: string | null; team5: string | null
   team_points?: TeamPoints[]
+  live_teams?: string[]
   total_cost: number
   total_points: number
   wildcard_used?: boolean
@@ -20,7 +21,7 @@ interface RankedPick {
 
 const MEDAL = ['🥇', '🥈', '🥉']
 
-function TeamPointsPill({ name, points }: { name: string; points: number }) {
+function TeamPointsPill({ name, points, live }: { name: string; points: number; live?: boolean }) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
   const positive = points > 0
@@ -29,20 +30,21 @@ function TeamPointsPill({ name, points }: { name: string; points: number }) {
     <span
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
       style={{
-        background: positive ? 'rgba(74,202,106,0.1)' : negative ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${positive ? 'rgba(74,202,106,0.3)' : negative ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
+        background: live ? 'rgba(239,68,68,0.12)' : positive ? 'rgba(74,202,106,0.1)' : negative ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${live ? 'rgba(239,68,68,0.5)' : positive ? 'rgba(74,202,106,0.3)' : negative ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
       }}
     >
       <Flag code={team.code} name={team.name} size={16} />
-      <span style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
+      <span style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
         {team.name}
       </span>
       <span
         className="font-bold tabular-nums"
-        style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}
+        style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}
       >
         {points > 0 ? '+' : ''}{points}
       </span>
+      {live && <span className="animate-pulse text-[10px] text-red-400 font-bold">▶</span>}
     </span>
   )
 }
@@ -125,8 +127,16 @@ export default function RankingPage() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-white text-base">{p.name}</span>
+                    {(p.live_teams?.length ?? 0) > 0 && (
+                      <span
+                        className="animate-pulse text-[10px] px-1.5 py-0.5 rounded font-bold tracking-wider"
+                        style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)', color: '#FCA5A5' }}
+                      >
+                        ● LIVE
+                      </span>
+                    )}
                     {p.wildcard_used && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
                     )}
@@ -142,7 +152,7 @@ export default function RankingPage() {
                 {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {p.team_points!.map(t => (
-                      <TeamPointsPill key={t.name} name={t.name} points={t.points} />
+                      <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
                     ))}
                   </div>
                 ) : !tournamentStarted ? (

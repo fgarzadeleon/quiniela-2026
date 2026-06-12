@@ -27,7 +27,8 @@ export function getNextRound(stage: MatchStage): MatchStage | null {
 
 // Core computation — returns total and per-team breakdown for current team1-5
 function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: Map<string, number> } {
-  const finishedMatches = matches.filter(m => m.status === 'FINISHED')
+  const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
+  const finishedMatches = matches.filter(m => m.status === 'FINISHED' || LIVE.has(m.status))
 
   const hasWildcardData = pick.wildcard_used && pick.wildcard_effective_from && pick.wildcard_old_team1
 
