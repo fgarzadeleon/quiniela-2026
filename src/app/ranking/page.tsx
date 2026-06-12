@@ -151,9 +151,11 @@ export default function RankingPage() {
 
                 {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {p.team_points!.map(t => (
-                      <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
-                    ))}
+                    {[...p.team_points!]
+                      .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
+                      .map(t => (
+                        <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
+                      ))}
                   </div>
                 ) : !tournamentStarted ? (
                   <div className="flex gap-1.5 mt-2">
