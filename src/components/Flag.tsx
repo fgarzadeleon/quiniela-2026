@@ -7,9 +7,10 @@ interface FlagProps {
 export default function Flag({ code, name = '', size = 20 }: FlagProps) {
   return (
     <img
-      src={`https://flagcdn.com/w${size}/${code.toLowerCase()}.png`}
-      srcSet={`https://flagcdn.com/w${size * 2}/${code.toLowerCase()}.png 2x`}
+      src={`https://flagcdn.com/w40/${code.toLowerCase()}.png`}
+      srcSet={`https://flagcdn.com/w80/${code.toLowerCase()}.png 2x`}
       width={size}
+      height={Math.round(size * 0.75)}
       alt={name}
       style={{ display: 'inline-block', verticalAlign: 'middle', borderRadius: 2 }}
     />

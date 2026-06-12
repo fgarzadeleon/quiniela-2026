@@ -46,26 +46,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `football-data.org returned ${fdRes.status}` }, { status: 502 })
   }
 
-  const { matches: fdMatches = [] } = await fdRes.json()
+  const fdJson = await fdRes.json()
+  const fdMatches: unknown[] = fdJson.matches ?? []
   const supabase = createServerClient()
   const log: string[] = []
   let updated = 0
   let inserted = 0
   let skipped = 0
+  let finished = 0
 
-  for (const m of fdMatches) {
-    const ourStage = STAGE_MAP[m.stage]
+  log.push(`football-data.org returned ${fdMatches.length} matches total`)
+
+  for (const m of fdMatches as Record<string, unknown>[]) {
+    const ourStage = STAGE_MAP[(m.stage as string) ?? '']
     if (!ourStage) { skipped++; continue }
 
-    const home = ourName(m.homeTeam?.name ?? '')
-    const away = ourName(m.awayTeam?.name ?? '')
+    const homeTeam = m.homeTeam as Record<string, string> | undefined
+    const awayTeam = m.awayTeam as Record<string, string> | undefined
+    const home = ourName(homeTeam?.name ?? '')
+    const away = ourName(awayTeam?.name ?? '')
     if (!home || !away) { skipped++; continue }
 
-    const homeScore: number | null = m.score?.fullTime?.home ?? null
-    const awayScore: number | null = m.score?.fullTime?.away ?? null
+    const score = m.score as Record<string, Record<string, number | null>> | undefined
+    const homeScore: number | null = score?.fullTime?.home ?? null
+    const awayScore: number | null = score?.fullTime?.away ?? null
     const isFinished = m.status === 'FINISHED' && homeScore != null && awayScore != null
 
     if (!isFinished) { skipped++; continue }
+    finished++
 
     // Look up existing row
     const { data: existing } = await supabase
@@ -78,15 +86,17 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       if (existing.status === 'FINISHED') { skipped++; continue }
-      await supabase
+      const { error } = await supabase
         .from('matches')
         .update({ home_score: homeScore, away_score: awayScore, status: 'FINISHED' })
         .eq('id', existing.id)
+      if (error) { log.push(`✗ update failed: ${home} vs ${away}: ${error.message}`); continue }
       log.push(`✓ ${home} ${homeScore}–${awayScore} ${away}`)
       updated++
-    } else if (ourStage !== 'GROUP_STAGE') {
-      // Knockout fixture not yet in DB — insert it
-      await supabase.from('matches').insert({
+    } else {
+      // Insert — works for both group stage and knockout fixtures
+      const group = (m.group as string | undefined)?.replace('GROUP_', '') ?? null
+      const { error } = await supabase.from('matches').insert({
         home_team: home,
         away_team: away,
         home_score: homeScore,
@@ -94,15 +104,14 @@ export async function POST(req: NextRequest) {
         status: 'FINISHED',
         stage: ourStage,
         match_date: m.utcDate,
+        ...(group && { group_name: group }),
       })
+      if (error) { log.push(`✗ insert failed: ${home} vs ${away}: ${error.message}`); continue }
       log.push(`✓ [new] ${home} ${homeScore}–${awayScore} ${away}`)
       inserted++
-    } else {
-      log.push(`⚠ Group match not in DB: ${home} vs ${away} — run Init first`)
-      skipped++
     }
   }
 
-  const summary = `${updated} updated · ${inserted} new · ${skipped} skipped`
+  const summary = `${finished} finished matches found · ${updated} updated · ${inserted} inserted · ${skipped} skipped`
   return NextResponse.json({ log: [summary, ...log] })
 }
