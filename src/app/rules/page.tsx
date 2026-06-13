@@ -1,4 +1,7 @@
 import Link from 'next/link'
+import Flag from '@/components/Flag'
+import { TEAMS } from '@/lib/teams'
+import { Tier } from '@/types'
 
 export const metadata = { title: 'Rules · Quiniela 2026' }
 
@@ -164,6 +167,66 @@ export default function RulesPage() {
             ⚽ Make Your Pick
           </Link>
         </div>
+
+        {/* Appendix */}
+        <div className="mt-16 mb-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <span
+              style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}
+            >
+              APPENDIX
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          </div>
+
+          <h2
+            style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.4rem', letterSpacing: '0.06em', color: '#F5C518' }}
+            className="mb-1"
+          >
+            ALL 48 TEAMS BY TIER
+          </h2>
+          <p className="text-white/40 text-xs mb-6">Costs based on betting odds (OddsChecker avg, 07/06/2026). Formula: cost = round5(−35.64 × log₁₀(odds) + 126.54), min 10.</p>
+
+          {((['A', 'B', 'C', 'D'] as Tier[])).map(tier => {
+            const tierTeams = TEAMS.filter(t => t.tier === tier)
+            const META: Record<Tier, { label: string; range: string; color: string }> = {
+              A: { label: 'Elite Favourites', range: '85–100 pts', color: '#D72638' },
+              B: { label: 'Strong Contenders', range: '55–80 pts', color: '#6A90F0' },
+              C: { label: 'Dark Horses', range: '30–50 pts', color: '#4ACA6A' },
+              D: { label: 'Underdogs', range: '10–25 pts', color: '#D4A017' },
+            }
+            const { label, range, color } = META[tier]
+            return (
+              <div key={tier} className="mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded"
+                    style={{ background: `${color}22`, border: `1px solid ${color}44`, color }}
+                  >
+                    TIER {tier}
+                  </span>
+                  <span className="text-white/60 text-xs">{label}</span>
+                  <span className="text-white/25 text-xs">· {range}</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {tierTeams.map(t => (
+                    <div
+                      key={t.name}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg"
+                      style={{ background: `${color}08`, border: `1px solid ${color}18` }}
+                    >
+                      <Flag code={t.code} name={t.name} size={20} />
+                      <span className="text-white/80 text-xs truncate flex-1">{t.name}</span>
+                      <span className="text-white/30 text-xs tabular-nums flex-shrink-0">{t.cost}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
       </div>
     </div>
   )
