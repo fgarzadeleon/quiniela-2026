@@ -102,7 +102,7 @@ export default function HomePage() {
 
           <div className="flex flex-col sm:flex-row justify-center gap-4 mt-12">
             <Link
-              href="/picks"
+              href="/my-picks"
               className="px-8 py-3 rounded-xl font-bold text-base uppercase tracking-widest transition-all duration-200 hover:scale-105"
               style={{
                 background: 'linear-gradient(135deg, #D72638, #8B0A1A)',
@@ -112,7 +112,7 @@ export default function HomePage() {
                 letterSpacing: '0.1em',
               }}
             >
-              ⚽ Make Your Pick
+              🃏 Play Your Wildcard
             </Link>
             <Link
               href="/ranking"
