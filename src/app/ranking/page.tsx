@@ -33,7 +33,13 @@ interface RankedPick {
   name: string
   team1: string | null; team2: string | null; team3: string | null
   team4: string | null; team5: string | null
+  wildcard_old_team1?: string | null; wildcard_old_team2?: string | null
+  wildcard_old_team3?: string | null; wildcard_old_team4?: string | null
+  wildcard_old_team5?: string | null
+  wildcard_effective_from?: string | null
   team_points?: TeamPoints[]
+  old_team_points?: TeamPoints[]
+  wildcard_pending?: boolean
   live_teams?: string[]
   total_cost: number
   total_points: number
@@ -43,11 +49,50 @@ interface RankedPick {
 
 const MEDAL = ['🥇', '🥈', '🥉']
 
-function TeamPointsPill({ name, points, live }: { name: string; points: number; live?: boolean }) {
+type SubStatus = 'normal' | 'subOut' | 'subIn'
+
+function TeamPointsPill({ name, points, live, sub = 'normal' }: {
+  name: string; points: number; live?: boolean; sub?: SubStatus
+}) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
   const positive = points > 0
   const negative = points < 0
+
+  if (sub === 'subOut') {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+        style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)', opacity: 0.75 }}
+      >
+        <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼</span>
+        <Flag code={team.code} name={team.name} size={16} />
+        <span style={{ color: 'rgba(255,255,255,0.45)' }}>{team.name}</span>
+        <span className="font-bold tabular-nums" style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
+          {points > 0 ? '+' : ''}{points}
+        </span>
+      </span>
+    )
+  }
+
+  if (sub === 'subIn') {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+        style={{ background: 'rgba(74,202,106,0.1)', border: '1px solid rgba(74,202,106,0.3)' }}
+      >
+        <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>▲</span>
+        <Flag code={team.code} name={team.name} size={16} />
+        <span style={{ color: live ? '#FCA5A5' : '#4ACA6A' }}>{team.name}</span>
+        <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
+          {points > 0 ? '+' : ''}{points}
+        </span>
+        {live && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
+      </span>
+    )
+  }
+
+  // normal / kept
   return (
     <span
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
@@ -60,10 +105,7 @@ function TeamPointsPill({ name, points, live }: { name: string; points: number; 
       <span style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
         {team.name}
       </span>
-      <span
-        className="font-bold tabular-nums"
-        style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}
-      >
+      <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
         {points > 0 ? '+' : ''}{points}
       </span>
       {live && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
@@ -228,7 +270,7 @@ export default function RankingPage() {
                             ● LIVE
                           </span>
                         )}
-                        {p.wildcard_used && (
+                        {p.wildcard_used && !p.wildcard_pending && (p.old_team_points?.length ?? 0) === 0 && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
                         )}
                         {(p.host_bonus ?? 0) > 0 && (
@@ -241,12 +283,41 @@ export default function RankingPage() {
                     </div>
 
                     {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
-                      <div className="flex flex-wrap gap-1.5 mt-2">
-                        {[...p.team_points!]
-                          .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
-                          .map(t => (
-                            <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
-                          ))}
+                      <div className="mt-2 space-y-1.5">
+                        {/* Substituted-out teams (banked points) */}
+                        {(p.old_team_points?.length ?? 0) > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {[...p.old_team_points!]
+                              .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
+                              .map(t => (
+                                <TeamPointsPill key={t.name} name={t.name} points={t.points} sub="subOut" />
+                              ))}
+                          </div>
+                        )}
+                        {/* Active teams: sub-in for new, normal for kept */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {(() => {
+                            const oldSet = new Set([
+                              p.wildcard_old_team1, p.wildcard_old_team2, p.wildcard_old_team3,
+                              p.wildcard_old_team4, p.wildcard_old_team5,
+                            ].filter(Boolean))
+                            const hasActiveSub = (p.old_team_points?.length ?? 0) > 0
+                            return [...p.team_points!]
+                              .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
+                              .map(t => {
+                                const sub: SubStatus = hasActiveSub && !oldSet.has(t.name) ? 'subIn' : 'normal'
+                                return <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} sub={sub} />
+                              })
+                          })()}
+                        </div>
+                        {/* Pending wildcard notice */}
+                        {p.wildcard_pending && (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[10px] px-2 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]/70">
+                              🃏 wildcard queued — new teams reveal next matchday
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ) : !tournamentStarted ? (
                       <div className="flex gap-1.5 mt-2">

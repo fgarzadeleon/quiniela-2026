@@ -64,13 +64,19 @@ function scoreTeamMatches(teamName: string, teamMatches: Match[]): number {
   return pts
 }
 
-function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: Map<string, number> } {
+function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: Map<string, number>; byOldTeam: Map<string, number> } {
   const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
   const finishedMatches = matches.filter(m => m.status === 'FINISHED' || LIVE.has(m.status))
 
   const hasWildcardData = pick.wildcard_used && pick.wildcard_effective_from && pick.wildcard_old_team1
   const isGroupStageWildcard = hasWildcardData && pick.wildcard_effective_from === 'GROUP_STAGE'
   const wcUsedAt = (isGroupStageWildcard && pick.wildcard_used_at) ? new Date(pick.wildcard_used_at) : null
+
+  const currentSet = new Set([pick.team1, pick.team2, pick.team3, pick.team4, pick.team5].filter(Boolean))
+  const swappedOutNames = hasWildcardData
+    ? [pick.wildcard_old_team1!, pick.wildcard_old_team2!, pick.wildcard_old_team3!, pick.wildcard_old_team4!, pick.wildcard_old_team5!]
+        .filter(t => t && !currentSet.has(t))
+    : []
 
   function teamsForStage(stage: string): string[] {
     if (!hasWildcardData) return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
@@ -86,6 +92,8 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
   for (const t of [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]) {
     if (t) byTeam.set(t, 0)
   }
+  const byOldTeam = new Map<string, number>()
+  for (const t of swappedOutNames) byOldTeam.set(t, 0)
 
   let total = 0
 
@@ -101,7 +109,14 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       const newTeams = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
 
       for (const teamName of oldTeams) {
-        total += scoreTeamMatches(teamName, preWc.filter(m => m.home_team === teamName || m.away_team === teamName))
+        const pts = scoreTeamMatches(teamName, preWc.filter(m => m.home_team === teamName || m.away_team === teamName))
+        total += pts
+        if (byOldTeam.has(teamName)) {
+          byOldTeam.set(teamName, (byOldTeam.get(teamName) ?? 0) + pts)
+        } else if (byTeam.has(teamName)) {
+          // Kept team: pre-wildcard group-stage points go into byTeam too
+          byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
+        }
       }
       for (const teamName of newTeams) {
         const pts = scoreTeamMatches(teamName, postWc.filter(m => m.home_team === teamName || m.away_team === teamName))
@@ -112,6 +127,8 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
     }
 
     const teams = teamsForStage(stage)
+    const usingOldTeams = hasWildcardData && !isGroupStageWildcard &&
+      STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(pick.wildcard_effective_from!)
 
     for (const teamName of teams) {
       const team = getTeam(teamName)
@@ -135,11 +152,15 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       }
 
       total += pts
-      if (byTeam.has(teamName)) byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
+      if (usingOldTeams && byOldTeam.has(teamName)) {
+        byOldTeam.set(teamName, (byOldTeam.get(teamName) ?? 0) + pts)
+      } else if (!usingOldTeams && byTeam.has(teamName)) {
+        byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
+      }
     }
   }
 
-  return { total, byTeam }
+  return { total, byTeam, byOldTeam }
 }
 
 export function calculatePickPoints(pick: Pick, matches: Match[]): number {
@@ -151,4 +172,10 @@ export function calculatePickPointsBreakdown(pick: Pick, matches: Match[]): Arra
   return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
     .filter(Boolean)
     .map(name => ({ name: name!, points: byTeam.get(name!) ?? 0 }))
+}
+
+// Returns points earned by swapped-out teams before the wildcard took effect
+export function calculateOldTeamPointsBreakdown(pick: Pick, matches: Match[]): Array<{ name: string; points: number }> {
+  const { byOldTeam } = computePoints(pick, matches)
+  return [...byOldTeam.entries()].map(([name, points]) => ({ name, points }))
 }

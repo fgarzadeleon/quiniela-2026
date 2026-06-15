@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { calculatePickPoints, calculatePickPointsBreakdown } from '@/lib/scoring'
+import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES } from '@/lib/scoring'
 import { getTeam, SCORING, STAGE_ORDER } from '@/lib/teams'
 import { Match, Pick } from '@/types'
 
@@ -240,6 +240,8 @@ export async function GET() {
   const answers = Object.fromEntries((hostAnswers ?? [] as AnswerRow[]).map((a: AnswerRow) => [a.key, a.value]))
   const predMap = Object.fromEntries((hostPreds ?? [] as PredRow[]).map((p: PredRow) => [p.pick_id, p]))
 
+  const now = new Date()
+
   const ranked = (picks as Pick[])
     .filter(p => !p.name.toLowerCase().startsWith('test'))
     .map(p => {
@@ -248,19 +250,62 @@ export async function GET() {
         ? KEYS.reduce((sum, k) => sum + (answers[k] && pred[k] === answers[k] ? 100 : 0), 0)
         : 0
       const matchPoints = calculatePickPoints(p, matches)
-      const team_points = tournamentStarted ? calculatePickPointsBreakdown(p, matches) : []
-      const live_teams = tournamentStarted
+
+      // Wildcard is "pending" if used but the next matchday/round hasn't started yet
+      const isWcPending = !!(p.wildcard_used && p.wildcard_used_at && (() => {
+        const usedAt = new Date(p.wildcard_used_at!)
+        return WILDCARD_DEADLINES.some(d => d.deadline > usedAt && now < d.deadline)
+      })())
+
+      let team_points: { name: string; points: number }[] = []
+      let old_team_points: { name: string; points: number }[] = []
+
+      if (tournamentStarted) {
+        if (isWcPending && p.wildcard_used_at) {
+          // New teams not revealed yet — show old lineup with pre-wildcard points only
+          const wcTime = new Date(p.wildcard_used_at)
+          const preWcMatches = matches.filter(m => new Date(m.match_date) < wcTime)
+          const oldPick: Pick = {
+            ...p,
+            team1: p.wildcard_old_team1 ?? p.team1,
+            team2: p.wildcard_old_team2 ?? p.team2,
+            team3: p.wildcard_old_team3 ?? p.team3,
+            team4: p.wildcard_old_team4 ?? p.team4,
+            team5: p.wildcard_old_team5 ?? p.team5,
+            wildcard_used: false,
+            wildcard_effective_from: undefined,
+          }
+          team_points = calculatePickPointsBreakdown(oldPick, preWcMatches)
+        } else {
+          team_points = calculatePickPointsBreakdown(p, matches)
+          old_team_points = calculateOldTeamPointsBreakdown(p, matches)
+        }
+      }
+
+      const live_teams = tournamentStarted && !isWcPending
         ? [p.team1, p.team2, p.team3, p.team4, p.team5].filter(t => t && liveTeams.has(t))
         : []
+
       return {
         ...p,
         host_bonus,
         total_points: matchPoints + host_bonus,
         team_points,
+        old_team_points,
+        wildcard_pending: isWcPending,
         live_teams,
+        // Before tournament: hide all picks
         ...(!tournamentStarted && {
           team1: null, team2: null, team3: null, team4: null, team5: null,
           scorer1: null, scorer2: null, scorer3: null,
+        }),
+        // Pending wildcard: show old team lineup, hide new picks
+        ...(isWcPending && tournamentStarted && {
+          team1: p.wildcard_old_team1 ?? null,
+          team2: p.wildcard_old_team2 ?? null,
+          team3: p.wildcard_old_team3 ?? null,
+          team4: p.wildcard_old_team4 ?? null,
+          team5: p.wildcard_old_team5 ?? null,
         }),
       }
     })
