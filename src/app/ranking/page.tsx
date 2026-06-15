@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
+
 import Flag from '@/components/Flag'
 
 interface TeamPoints { name: string; points: number }
