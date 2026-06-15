@@ -51,6 +51,8 @@ const FD_TO_OURS: Record<string, string> = {
   'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
   'Czechia':            'Czech Republic',
   'Congo DR':           'DR Congo',
+  'Curaçao':            'Curacao',
+  'Türkiye':            'Turkey',
 }
 
 const STAGE_MAP: Record<string, Match['stage']> = {
@@ -108,6 +110,48 @@ async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string
   } catch {
     return { matches: [], liveTeams: new Set() }
   }
+}
+
+interface FunStat { icon: string; label: string; playerName: string; value: string }
+
+function computeFunStats(picks: Pick[], matches: Match[]): FunStat[] {
+  const scoreable = matches.filter(m => SCOREABLE_STATUSES.has(m.status))
+  if (scoreable.length === 0) return []
+
+  const data = picks
+    .filter(p => !p.name.toLowerCase().startsWith('test'))
+    .map(p => {
+      const teams = [p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean) as string[]
+      let gf = 0, ga = 0, wins = 0, draws = 0, losses = 0
+      for (const t of teams) {
+        for (const m of scoreable) {
+          const isHome = m.home_team === t, isAway = m.away_team === t
+          if (!isHome && !isAway) continue
+          const mGf = isHome ? m.home_score : m.away_score
+          const mGa = isHome ? m.away_score : m.home_score
+          gf += mGf; ga += mGa
+          if (mGf > mGa) wins++; else if (mGf === mGa) draws++; else losses++
+        }
+      }
+      return { name: p.name, gf, ga, diff: gf - ga, wins, draws, losses }
+    })
+
+  if (data.length === 0) return []
+
+  function top(key: keyof typeof data[0], high = true) {
+    return data.reduce((a, b) => high ? (a[key] >= b[key] ? a : b) : (a[key] <= b[key] ? a : b))
+  }
+
+  return [
+    { icon: '⚽', label: 'Most Goals Scored',    playerName: top('gf').name,     value: `${top('gf').gf} goals` },
+    { icon: '🥅', label: 'Most Goals Conceded',  playerName: top('ga').name,     value: `${top('ga').ga} goals` },
+    { icon: '🛡️', label: 'Best Defense',          playerName: top('ga',false).name, value: `${top('ga',false).ga} conceded` },
+    { icon: '🏆', label: 'Most Wins',             playerName: top('wins').name,   value: `${top('wins').wins} wins` },
+    { icon: '😬', label: 'Most Losses',           playerName: top('losses').name, value: `${top('losses').losses} losses` },
+    { icon: '🤝', label: 'Most Draws',            playerName: top('draws').name,  value: `${top('draws').draws} draws` },
+    { icon: '🎯', label: 'Best Goal Difference',  playerName: top('diff').name,   value: `${top('diff').diff > 0 ? '+' : ''}${top('diff').diff}` },
+    { icon: '😤', label: 'Worst Goal Difference', playerName: top('diff',false).name, value: `${top('diff',false).diff}` },
+  ]
 }
 
 export async function GET() {
@@ -169,5 +213,7 @@ export async function GET() {
       return { ...safe, rank: i + 1 }
     })
 
-  return NextResponse.json({ ranked, tournamentStarted })
+  const fun_stats = tournamentStarted ? computeFunStats(picks as Pick[], matches) : []
+
+  return NextResponse.json({ ranked, tournamentStarted, fun_stats })
 }

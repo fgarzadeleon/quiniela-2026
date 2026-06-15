@@ -15,6 +15,8 @@ const FD_TO_OURS: Record<string, string> = {
   'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
   'Czechia':            'Czech Republic',
   'Congo DR':           'DR Congo',
+  'Curaçao':            'Curacao',
+  'Türkiye':            'Turkey',
 }
 
 function norm(s: string) {

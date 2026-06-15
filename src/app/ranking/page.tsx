@@ -4,6 +4,7 @@ import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
 
 interface TeamPoints { name: string; points: number }
+interface FunStat { icon: string; label: string; playerName: string; value: string }
 
 interface RankedPick {
   id: string
@@ -51,6 +52,7 @@ function TeamPointsPill({ name, points, live }: { name: string; points: number; 
 
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
+  const [funStats, setFunStats] = useState<FunStat[]>([])
   const [tournamentStarted, setTournamentStarted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -60,6 +62,7 @@ export default function RankingPage() {
       .then(r => r.json())
       .then(d => {
         setPicks(d.ranked ?? [])
+        setFunStats(d.fun_stats ?? [])
         setTournamentStarted(d.tournamentStarted ?? false)
         setLoading(false)
       })
@@ -172,6 +175,37 @@ export default function RankingPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {funStats.length > 0 && (
+        <div className="mt-14">
+          <h2
+            style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', letterSpacing: '0.05em' }}
+            className="mb-1"
+          >
+            FUN STATS
+          </h2>
+          <p className="text-white/40 text-xs mb-5">Based on current team lineups</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {funStats.map(s => (
+              <div
+                key={s.label}
+                className="rounded-xl p-4 flex flex-col gap-1"
+                style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.08)' }}
+              >
+                <span className="text-xl">{s.icon}</span>
+                <span className="text-white/40 text-[11px] uppercase tracking-wider leading-tight">{s.label}</span>
+                <span className="text-white font-bold text-sm mt-0.5 truncate">{s.playerName}</span>
+                <span
+                  className="tabular-nums font-bold"
+                  style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem', color: '#F5C518' }}
+                >
+                  {s.value}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
