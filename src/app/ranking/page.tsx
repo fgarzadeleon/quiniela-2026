@@ -5,6 +5,11 @@ import Flag from '@/components/Flag'
 
 interface TeamPoints { name: string; points: number }
 interface FunStat { icon: string; label: string; playerName: string; value: string }
+interface TeamTableRow {
+  name: string; code: string; tier: string; cost: number
+  picks_count: number; wins: number; draws: number; losses: number
+  gf: number; ga: number; pts: number
+}
 
 interface RankedPick {
   id: string
@@ -50,11 +55,12 @@ function TeamPointsPill({ name, points, live }: { name: string; points: number; 
   )
 }
 
-type Tab = 'ranking' | 'fun_stats'
+type Tab = 'ranking' | 'teams' | 'fun_stats'
 
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
   const [funStats, setFunStats] = useState<FunStat[]>([])
+  const [teamTable, setTeamTable] = useState<TeamTableRow[]>([])
   const [tournamentStarted, setTournamentStarted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -66,6 +72,7 @@ export default function RankingPage() {
       .then(d => {
         setPicks(d.ranked ?? [])
         setFunStats(d.fun_stats ?? [])
+        setTeamTable(d.team_table ?? [])
         setTournamentStarted(d.tournamentStarted ?? false)
         setLoading(false)
       })
@@ -94,14 +101,14 @@ export default function RankingPage() {
 
       {funStats.length > 0 && (
         <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {([['ranking', '🏆 Ranking'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
+          {([['ranking', '🏆 Ranking'], ['teams', '🌍 By Country'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className="flex-1 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer"
+              className="flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer"
               style={{
                 fontFamily: 'Impact, sans-serif',
-                letterSpacing: '0.08em',
+                letterSpacing: '0.06em',
                 background: tab === t ? 'linear-gradient(135deg, #D72638, #8B0A1A)' : 'transparent',
                 color: tab === t ? '#fff' : 'rgba(255,255,255,0.4)',
               }}
@@ -203,6 +210,58 @@ export default function RankingPage() {
             </div>
           )}
         </>
+      )}
+
+      {tab === 'teams' && teamTable.length > 0 && (
+        <div>
+          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked.</p>
+          <div className="space-y-2">
+            {teamTable.map((t, i) => {
+              const positive = t.pts > 0
+              const negative = t.pts < 0
+              return (
+                <div
+                  key={t.name}
+                  className="rounded-xl px-4 py-3 flex items-center gap-3"
+                  style={{
+                    background: i === 0
+                      ? 'linear-gradient(145deg, #1A1400, #3A2A00)'
+                      : 'linear-gradient(145deg, #0D1F4A, #111827)',
+                    border: `1px solid ${i === 0 ? '#F5C518' : 'rgba(255,255,255,0.08)'}`,
+                  }}
+                >
+                  <span className="text-white/30 text-sm font-bold w-6 text-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <Flag code={t.code} name={t.name} size={24} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-white font-bold text-sm">{t.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/15 text-white/30">
+                        Tier {t.tier} · {t.cost}pts
+                      </span>
+                      <span className="text-[10px] text-white/30">{t.picks_count} {t.picks_count === 1 ? 'pick' : 'picks'}</span>
+                    </div>
+                    <div className="flex gap-3 mt-1 text-[11px] text-white/40">
+                      <span>{t.wins}W {t.draws}D {t.losses}L</span>
+                      <span>{t.gf}:{t.ga} GD {t.gf - t.ga > 0 ? '+' : ''}{t.gf - t.ga}</span>
+                    </div>
+                  </div>
+                  <span
+                    className="font-bold tabular-nums shrink-0"
+                    style={{
+                      fontFamily: 'Impact, sans-serif',
+                      fontSize: '1.2rem',
+                      color: i === 0 ? '#F5C518' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.4)',
+                    }}
+                  >
+                    {positive ? '+' : ''}{t.pts}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       {tab === 'fun_stats' && funStats.length > 0 && (

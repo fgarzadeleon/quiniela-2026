@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { calculatePickPoints, calculatePickPointsBreakdown } from '@/lib/scoring'
+import { getTeam, SCORING, STAGE_ORDER } from '@/lib/teams'
 import { Match, Pick } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -114,6 +115,61 @@ async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string
 
 interface FunStat { icon: string; label: string; playerName: string; value: string }
 
+interface TeamTableRow {
+  name: string; code: string; tier: string; cost: number
+  picks_count: number; wins: number; draws: number; losses: number
+  gf: number; ga: number; pts: number
+}
+
+function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
+  const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
+  const scoreable = matches.filter(m => m.status === 'FINISHED' || LIVE.has(m.status))
+
+  // Count how many players picked each team (including wildcard old teams)
+  const picksCount = new Map<string, number>()
+  for (const p of picks) {
+    const teams = new Set([p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean) as string[])
+    for (const t of teams) picksCount.set(t, (picksCount.get(t) ?? 0) + 1)
+  }
+
+  const rows: TeamTableRow[] = []
+  for (const [teamName, count] of picksCount) {
+    const team = getTeam(teamName)
+    if (!team) continue
+    const scoring = SCORING[team.tier as 'A' | 'B' | 'C' | 'D']
+    let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0
+
+    for (const stage of STAGE_ORDER) {
+      const stageMatches = scoreable.filter(
+        m => m.stage === stage && (m.home_team === teamName || m.away_team === teamName)
+      )
+      if (stageMatches.length === 0) continue
+
+      // Team played in this stage → they advanced to it (add bonus for non-group stages)
+      if (stage !== 'GROUP_STAGE') pts += scoring.advanceRound
+
+      for (const m of stageMatches) {
+        const isHome = m.home_team === teamName
+        const goalsFor = isHome ? m.home_score : m.away_score
+        const goalsAgainst = isHome ? m.away_score : m.home_score
+        gf += goalsFor; ga += goalsAgainst
+        if (goalsFor > goalsAgainst) { wins++; pts += scoring.win }
+        else if (goalsFor === goalsAgainst) { draws++; pts += scoring.draw }
+        else { losses++; pts += scoring.loss }
+        pts += goalsFor * scoring.goalFor
+        pts += goalsAgainst * scoring.goalAgainst
+
+        // Champion bonus
+        if (stage === 'FINAL' && goalsFor > goalsAgainst) pts += scoring.champion
+      }
+    }
+
+    rows.push({ name: teamName, code: team.code, tier: team.tier, cost: team.cost, picks_count: count, wins, draws, losses, gf, ga, pts })
+  }
+
+  return rows.sort((a, b) => b.pts - a.pts)
+}
+
 function computeFunStats(picks: Pick[], matches: Match[]): FunStat[] {
   const scoreable = matches.filter(m => SCOREABLE_STATUSES.has(m.status))
   if (scoreable.length === 0) return []
@@ -214,6 +270,7 @@ export async function GET() {
     })
 
   const fun_stats = tournamentStarted ? computeFunStats(picks as Pick[], matches) : []
+  const team_table = tournamentStarted ? computeTeamTable(picks as Pick[], matches) : []
 
-  return NextResponse.json({ ranked, tournamentStarted, fun_stats })
+  return NextResponse.json({ ranked, tournamentStarted, fun_stats, team_table })
 }
