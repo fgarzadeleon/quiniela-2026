@@ -11,6 +11,21 @@ interface TeamTableRow {
   picks_count: number; wins: number; draws: number; losses: number
   gf: number; ga: number; pts: number
 }
+interface HostCounts { USA: number; Mexico: number; Canada: number; total: number }
+interface HostStats { questions: Record<string, HostCounts>; answers: Record<string, string | null> }
+
+const HOST_QUESTIONS = [
+  { key: 'dirtiest',           label: 'Dirtiest Host',       icon: '🟨🟥' },
+  { key: 'best',               label: 'Best Host',           icon: '🏆' },
+  { key: 'worst',              label: 'Worst Host',          icon: '📉' },
+  { key: 'most_goals_for',     label: 'Most Goals Scored',   icon: '⚽' },
+  { key: 'most_goals_against', label: 'Most Goals Conceded', icon: '🥅' },
+]
+const HOST_FLAGS: Record<string, { code: string }> = {
+  USA:    { code: 'us' },
+  Mexico: { code: 'mx' },
+  Canada: { code: 'ca' },
+}
 
 interface RankedPick {
   id: string
@@ -68,6 +83,7 @@ export default function RankingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('ranking')
+  const [hostStats, setHostStats] = useState<HostStats | null>(null)
 
   useEffect(() => {
     fetch('/api/ranking')
@@ -81,6 +97,11 @@ export default function RankingPage() {
         setLoading(false)
       })
       .catch(() => { setError('Could not load ranking'); setLoading(false) })
+
+    fetch('/api/host-predictions/stats')
+      .then(r => r.json())
+      .then(d => { if (!d.locked) setHostStats(d) })
+      .catch(() => {})
   }, [])
 
   return (
@@ -302,7 +323,7 @@ export default function RankingPage() {
       {tab === 'fun_stats' && funStats.length > 0 && (
         <div>
           <p className="text-white/40 text-xs mb-5">Based on current team lineups — approximate, wildcard teams included</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
             {funStats.map(s => (
               <div
                 key={s.label}
@@ -321,6 +342,78 @@ export default function RankingPage() {
               </div>
             ))}
           </div>
+
+          {hostStats && (
+            <div>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
+                  🏟️ HOSTS CHALLENGE
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              </div>
+              <p className="text-white/40 text-xs mb-4">What everyone picked for each host question</p>
+              <div className="space-y-4">
+                {HOST_QUESTIONS.map(q => {
+                  const counts = hostStats.questions[q.key]
+                  const correct = hostStats.answers[q.key]
+                  if (!counts || counts.total === 0) return null
+                  return (
+                    <div
+                      key={q.key}
+                      className="rounded-xl p-4"
+                      style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.08)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-lg">{q.icon}</span>
+                        <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.95rem', color: '#F5C518', letterSpacing: '0.05em' }}>
+                          {q.label.toUpperCase()}
+                        </span>
+                        {correct && (
+                          <span
+                            className="ml-auto text-[10px] px-2 py-0.5 rounded font-bold"
+                            style={{ background: 'rgba(74,202,106,0.15)', border: '1px solid rgba(74,202,106,0.35)', color: '#4ACA6A' }}
+                          >
+                            ✓ {correct}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        {(['USA', 'Mexico', 'Canada'] as const).map(host => {
+                          const n = counts[host]
+                          const pct = Math.round((n / counts.total) * 100)
+                          const isCorrect = correct === host
+                          const hf = HOST_FLAGS[host]
+                          return (
+                            <div key={host} className="flex items-center gap-2 text-xs">
+                              <div className="flex items-center gap-1 w-20 shrink-0">
+                                <Flag code={hf.code} name={host} size={14} />
+                                <span style={{ color: isCorrect ? '#4ACA6A' : 'rgba(255,255,255,0.55)' }}>{host}</span>
+                              </div>
+                              <div className="flex-1 rounded-full overflow-hidden h-2.5" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                                <div
+                                  className="h-full rounded-full transition-all duration-700"
+                                  style={{
+                                    width: `${pct}%`,
+                                    background: isCorrect ? '#4ACA6A' : 'rgba(255,255,255,0.22)',
+                                  }}
+                                />
+                              </div>
+                              <span className="w-10 text-right tabular-nums shrink-0" style={{ color: isCorrect ? '#4ACA6A' : 'rgba(255,255,255,0.4)' }}>
+                                {pct}%
+                              </span>
+                              <span className="w-6 text-right tabular-nums shrink-0 text-white/25">{n}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <p className="text-white/20 text-[10px] mt-2">{counts.total} picks</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
