@@ -50,12 +50,15 @@ function TeamPointsPill({ name, points, live }: { name: string; points: number; 
   )
 }
 
+type Tab = 'ranking' | 'fun_stats'
+
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
   const [funStats, setFunStats] = useState<FunStat[]>([])
   const [tournamentStarted, setTournamentStarted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [tab, setTab] = useState<Tab>('ranking')
 
   useEffect(() => {
     fetch('/api/ranking')
@@ -71,7 +74,7 @@ export default function RankingPage() {
 
   return (
     <section className="max-w-5xl mx-auto px-4 py-10">
-      <div className="text-center mb-10">
+      <div className="text-center mb-8">
         <h1
           style={{
             fontFamily: 'Impact, sans-serif',
@@ -89,104 +92,122 @@ export default function RankingPage() {
         </p>
       </div>
 
-      {!tournamentStarted && picks.length > 0 && (
-        <div
-          className="rounded-xl px-4 py-3 mb-6 flex items-center gap-3 text-sm"
-          style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}
-        >
-          <span className="text-xl">🔒</span>
-          <span className="text-white/70">
-            <strong className="text-[#F5C518]">{picks.length} entries</strong> locked in — team picks revealed at kick-off on June 11.
-          </span>
-        </div>
-      )}
-
-      {loading && <div className="text-center text-white/40 py-20">Loading ranking…</div>}
-      {error && <div className="text-center text-[#D72638] py-20">{error}</div>}
-
-      {!loading && !error && picks.length === 0 && (
-        <div className="text-center text-white/40 py-20">
-          No picks yet. <a href="/picks" className="text-[#F5C518] hover:underline">Be the first!</a>
-        </div>
-      )}
-
-      {picks.length > 0 && (
-        <div className="space-y-3">
-          {picks.map((p, i) => (
-            <div
-              key={p.id}
+      {funStats.length > 0 && (
+        <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          {([['ranking', '🏆 Ranking'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className="flex-1 py-2 rounded-lg text-sm font-bold uppercase tracking-wider transition-all duration-150 cursor-pointer"
               style={{
-                background: i === 0
-                  ? 'linear-gradient(145deg, #1A1400, #3A2A00)'
-                  : 'linear-gradient(145deg, #0D1F4A, #111827)',
-                border: `1px solid ${i === 0 ? '#F5C518' : 'rgba(255,255,255,0.08)'}`,
-                boxShadow: i === 0 ? '0 0 20px rgba(245,197,24,0.2)' : 'none',
+                fontFamily: 'Impact, sans-serif',
+                letterSpacing: '0.08em',
+                background: tab === t ? 'linear-gradient(135deg, #D72638, #8B0A1A)' : 'transparent',
+                color: tab === t ? '#fff' : 'rgba(255,255,255,0.4)',
               }}
-              className="rounded-xl p-4 flex items-start gap-4"
             >
-              <div className="text-2xl min-w-8 text-center">
-                {i < 3 ? MEDAL[i] : <span className="text-white/40 text-lg font-bold">#{p.rank}</span>}
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-white text-base">{p.name}</span>
-                    {(p.live_teams?.length ?? 0) > 0 && (
-                      <span
-                        className="animate-pulse text-[10px] px-1.5 py-0.5 rounded font-bold tracking-wider"
-                        style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)', color: '#FCA5A5' }}
-                      >
-                        ● LIVE
-                      </span>
-                    )}
-                    {p.wildcard_used && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
-                    )}
-                    {(p.host_bonus ?? 0) > 0 && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]">🏟️ +{p.host_bonus}pts</span>
-                    )}
-                  </div>
-                  <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', color: i === 0 ? '#F5C518' : '#fff' }}>
-                    {p.total_points.toLocaleString()} pts
-                  </span>
-                </div>
-
-                {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[...p.team_points!]
-                      .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
-                      .map(t => (
-                        <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
-                      ))}
-                  </div>
-                ) : !tournamentStarted ? (
-                  <div className="flex gap-1.5 mt-2">
-                    {[1,2,3,4,5].map(n => (
-                      <span key={n} className="inline-block w-16 h-5 rounded-lg bg-white/5 border border-white/10" />
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="text-right text-xs text-white/30 hidden sm:block">
-                <div>{p.total_cost} pts</div>
-                <div>budget</div>
-              </div>
-            </div>
+              {label}
+            </button>
           ))}
         </div>
       )}
 
-      {funStats.length > 0 && (
-        <div className="mt-14">
-          <h2
-            style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(1.2rem, 3vw, 1.8rem)', letterSpacing: '0.05em' }}
-            className="mb-1"
-          >
-            FUN STATS
-          </h2>
-          <p className="text-white/40 text-xs mb-5">Based on current team lineups</p>
+      {tab === 'ranking' && (
+        <>
+          {!tournamentStarted && picks.length > 0 && (
+            <div
+              className="rounded-xl px-4 py-3 mb-6 flex items-center gap-3 text-sm"
+              style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}
+            >
+              <span className="text-xl">🔒</span>
+              <span className="text-white/70">
+                <strong className="text-[#F5C518]">{picks.length} entries</strong> locked in — team picks revealed at kick-off on June 11.
+              </span>
+            </div>
+          )}
+
+          {loading && <div className="text-center text-white/40 py-20">Loading ranking…</div>}
+          {error && <div className="text-center text-[#D72638] py-20">{error}</div>}
+
+          {!loading && !error && picks.length === 0 && (
+            <div className="text-center text-white/40 py-20">
+              No picks yet. <a href="/picks" className="text-[#F5C518] hover:underline">Be the first!</a>
+            </div>
+          )}
+
+          {picks.length > 0 && (
+            <div className="space-y-3">
+              {picks.map((p, i) => (
+                <div
+                  key={p.id}
+                  style={{
+                    background: i === 0
+                      ? 'linear-gradient(145deg, #1A1400, #3A2A00)'
+                      : 'linear-gradient(145deg, #0D1F4A, #111827)',
+                    border: `1px solid ${i === 0 ? '#F5C518' : 'rgba(255,255,255,0.08)'}`,
+                    boxShadow: i === 0 ? '0 0 20px rgba(245,197,24,0.2)' : 'none',
+                  }}
+                  className="rounded-xl p-4 flex items-start gap-4"
+                >
+                  <div className="text-2xl min-w-8 text-center">
+                    {i < 3 ? MEDAL[i] : <span className="text-white/40 text-lg font-bold">#{p.rank}</span>}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-white text-base">{p.name}</span>
+                        {(p.live_teams?.length ?? 0) > 0 && (
+                          <span
+                            className="animate-pulse text-[10px] px-1.5 py-0.5 rounded font-bold tracking-wider"
+                            style={{ background: 'rgba(239,68,68,0.2)', border: '1px solid rgba(239,68,68,0.5)', color: '#FCA5A5' }}
+                          >
+                            ● LIVE
+                          </span>
+                        )}
+                        {p.wildcard_used && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
+                        )}
+                        {(p.host_bonus ?? 0) > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]">🏟️ +{p.host_bonus}pts</span>
+                        )}
+                      </div>
+                      <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', color: i === 0 ? '#F5C518' : '#fff' }}>
+                        {p.total_points.toLocaleString()} pts
+                      </span>
+                    </div>
+
+                    {tournamentStarted && (p.team_points?.length ?? 0) > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {[...p.team_points!]
+                          .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
+                          .map(t => (
+                            <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} />
+                          ))}
+                      </div>
+                    ) : !tournamentStarted ? (
+                      <div className="flex gap-1.5 mt-2">
+                        {[1,2,3,4,5].map(n => (
+                          <span key={n} className="inline-block w-16 h-5 rounded-lg bg-white/5 border border-white/10" />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="text-right text-xs text-white/30 hidden sm:block">
+                    <div>{p.total_cost} pts</div>
+                    <div>budget</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'fun_stats' && funStats.length > 0 && (
+        <div>
+          <p className="text-white/40 text-xs mb-5">Based on current team lineups — approximate, wildcard teams included</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {funStats.map(s => (
               <div

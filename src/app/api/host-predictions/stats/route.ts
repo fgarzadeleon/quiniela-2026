@@ -29,7 +29,7 @@ export async function GET() {
   for (const q of QUESTIONS) {
     const counts = { USA: 0, Mexico: 0, Canada: 0, total: 0 }
     for (const row of preds ?? []) {
-      const val = (row as Record<string, string>)[q] as HostKey | undefined
+      const val = (row as unknown as Record<string, string>)[q] as HostKey | undefined
       if (val && HOSTS.includes(val)) { counts[val]++; counts.total++ }
     }
     questions[q] = counts
