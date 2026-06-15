@@ -119,7 +119,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
   }
 
-  const { keepTeams, newTeam1, newTeam2, newTeam3, scorer1, scorer2, scorer3 } = body
+  const { keepTeams, newTeam1, newTeam2, newTeam3 } = body
   const keepList: string[] = Array.isArray(keepTeams) ? keepTeams : []
   const newTeams = [newTeam1, newTeam2, newTeam3].filter(Boolean)
 
@@ -185,7 +185,6 @@ export async function PATCH(req: NextRequest) {
       wildcard_old_team3: originalTeams[2],
       wildcard_old_team4: originalTeams[3],
       wildcard_old_team5: originalTeams[4],
-      scorer1: scorer1 || null, scorer2: scorer2 || null, scorer3: scorer3 || null,
     })
     .eq('id', pick.id)
     .select(SAFE_FIELDS)
