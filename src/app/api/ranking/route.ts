@@ -272,5 +272,5 @@ export async function GET() {
   const fun_stats = tournamentStarted ? computeFunStats(picks as Pick[], matches) : []
   const team_table = tournamentStarted ? computeTeamTable(picks as Pick[], matches) : []
 
-  return NextResponse.json({ ranked, tournamentStarted, fun_stats, team_table })
+  return NextResponse.json({ ranked, tournamentStarted, fun_stats, team_table, live_teams_global: [...liveTeams] })
 }

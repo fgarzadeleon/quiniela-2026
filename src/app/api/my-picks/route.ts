@@ -166,8 +166,10 @@ export async function PATCH(req: NextRequest) {
 
   const now = new Date()
   const currentRound = getCurrentRound(now)
-  const nextRound = getNextRound(currentRound)
-  const wildcardEffectiveFrom = nextRound ?? currentRound
+  // Group stage wildcard: scoring splits per match date (using wildcard_used_at), not by stage
+  const wildcardEffectiveFrom = currentRound === 'GROUP_STAGE'
+    ? 'GROUP_STAGE'
+    : (getNextRound(currentRound) ?? currentRound)
 
   const { data: updated, error: updateErr } = await supabase
     .from('picks')

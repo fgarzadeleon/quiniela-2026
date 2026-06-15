@@ -63,6 +63,8 @@ export default function RankingPage() {
   const [funStats, setFunStats] = useState<FunStat[]>([])
   const [teamTable, setTeamTable] = useState<TeamTableRow[]>([])
   const [tournamentStarted, setTournamentStarted] = useState(false)
+  const [liveTeamsGlobal, setLiveTeamsGlobal] = useState<string[]>([])
+  const [filterLive, setFilterLive] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('ranking')
@@ -75,6 +77,7 @@ export default function RankingPage() {
         setFunStats(d.fun_stats ?? [])
         setTeamTable(d.team_table ?? [])
         setTournamentStarted(d.tournamentStarted ?? false)
+        setLiveTeamsGlobal(d.live_teams_global ?? [])
         setLoading(false)
       })
       .catch(() => { setError('Could not load ranking'); setLoading(false) })
@@ -120,6 +123,37 @@ export default function RankingPage() {
         </div>
       )}
 
+      {tab === 'ranking' && liveTeamsGlobal.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <button
+            onClick={() => setFilterLive(f => !f)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer"
+            style={{
+              background: filterLive ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${filterLive ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.12)'}`,
+              color: filterLive ? '#FCA5A5' : 'rgba(255,255,255,0.5)',
+            }}
+          >
+            <span className={`w-2 h-2 rounded-full bg-red-500 ${filterLive ? 'animate-pulse' : ''}`} />
+            LIVE NOW
+          </button>
+          {liveTeamsGlobal.map(teamName => {
+            const team = TEAM_MAP.get(teamName)
+            if (!team) return null
+            return (
+              <span
+                key={teamName}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs"
+                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.35)', color: '#FCA5A5' }}
+              >
+                <Flag code={team.code} name={team.name} size={14} />
+                {team.name}
+              </span>
+            )
+          })}
+        </div>
+      )}
+
       {tab === 'ranking' && (
         <>
           {!tournamentStarted && picks.length > 0 && (
@@ -145,7 +179,7 @@ export default function RankingPage() {
 
           {picks.length > 0 && (
             <div className="space-y-3">
-              {picks.map((p, i) => (
+              {(filterLive ? picks.filter(p => (p.live_teams?.length ?? 0) > 0) : picks).map((p, i) => (
                 <div
                   key={p.id}
                   style={{

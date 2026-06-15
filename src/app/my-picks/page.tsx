@@ -4,6 +4,11 @@ import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } f
 import Flag from '@/components/Flag'
 import PlayerSelect, { TeamSquad } from '@/components/PlayerSelect'
 import { Tier } from '@/types'
+import { WILDCARD_DEADLINES, getNextWildcardDeadline } from '@/lib/scoring'
+
+function fmtDate(d: Date) {
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+}
 
 const HOST_QUESTIONS = [
   { key: 'dirtiest',           label: 'Dirtiest Host',       desc: 'Most yellow + red cards combined',      icon: '🟨🟥' },
@@ -197,6 +202,9 @@ export default function MyPicksPage() {
     })
   }
 
+  const wcNow = new Date()
+  const wcNext = getNextWildcardDeadline(wcNow)
+
   const currentTeams = pick
     ? [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5].map(n => TEAM_MAP.get(n)!)
     : []
@@ -384,9 +392,49 @@ export default function MyPicksPage() {
               <span className="text-3xl">🃏</span>
               <div>
                 <h3 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.2rem', color: '#F5C518' }}>WILDCARD</h3>
-                <p className="text-white/50 text-sm">Swap 3 of your teams. Keep 2, replace the rest. Budget rules still apply. One use only.</p>
+                <p className="text-white/50 text-sm">Keep 2 teams, replace the 3 others. Budget rules still apply. <strong className="text-white/70">One use only.</strong></p>
               </div>
             </div>
+
+            {/* Effective round callout */}
+            {wcNext && (
+              <div className="rounded-lg px-3 py-2.5 mb-4" style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}>
+                <p className="text-[#F5C518] text-sm font-bold">
+                  ⚡ Use it now → new teams score from <span style={{ fontFamily: 'Impact, sans-serif' }}>{wcNext.label}</span>
+                </p>
+                <p className="text-white/40 text-xs mt-0.5">Deadline: {fmtDate(wcNext.deadline)}</p>
+              </div>
+            )}
+
+            {/* Deadline table */}
+            <div className="mb-5">
+              <p className="text-white/30 text-[11px] uppercase tracking-wider mb-2">Wildcard deadlines</p>
+              <div className="space-y-1">
+                {WILDCARD_DEADLINES.map(({ label, deadline }) => {
+                  const isPast = wcNow >= deadline
+                  const isCurrent = wcNext?.deadline.getTime() === deadline.getTime()
+                  return (
+                    <div
+                      key={deadline.toISOString()}
+                      className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs"
+                      style={{
+                        background: isCurrent ? 'rgba(74,202,106,0.07)' : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${isCurrent ? 'rgba(74,202,106,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                      }}
+                    >
+                      <span style={{ color: isPast ? 'rgba(255,255,255,0.22)' : isCurrent ? '#4ACA6A' : 'rgba(255,255,255,0.55)' }}>
+                        {label}
+                      </span>
+                      <span className="tabular-nums" style={{ color: isPast ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.38)' }}>
+                        {isPast ? 'Closed' : `Use before ${fmtDate(deadline)}`}
+                        {isCurrent && <span className="ml-2 font-bold" style={{ color: '#4ACA6A' }}>← now</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
             <button
               onClick={() => {
                 setError('')
@@ -576,6 +624,14 @@ export default function MyPicksPage() {
           <div className="text-4xl mb-2">🐚</div>
           <h1 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.8rem', color: '#F5C518' }}>WILDCARD</h1>
           <p className="text-white/50 text-sm mt-2">Lock 2 teams to keep, then pick 3 replacements.</p>
+          {wcNext && (
+            <div className="mt-4 inline-block rounded-lg px-4 py-2.5 text-center" style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}>
+              <p className="text-[#F5C518] text-sm font-bold">
+                ⚡ New teams score from <span style={{ fontFamily: 'Impact, sans-serif' }}>{wcNext.label}</span>
+              </p>
+              <p className="text-white/40 text-xs mt-0.5">Deadline: {fmtDate(wcNext.deadline)}</p>
+            </div>
+          )}
         </div>
 
         {/* Step 1 — pick which 2 to keep */}

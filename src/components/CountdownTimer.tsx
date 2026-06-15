@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { WILDCARD_DEADLINES, WildcardDeadline } from '@/lib/scoring'
 
-// 2026 FIFA World Cup kick-off: June 11, 2026 16:00 UTC (first match)
 const WC_START = new Date('2026-06-11T19:00:00Z')
 
 interface TimeLeft {
@@ -11,15 +11,19 @@ interface TimeLeft {
   seconds: number
 }
 
-function calcTimeLeft(): TimeLeft {
-  const diff = WC_START.getTime() - Date.now()
+function calcTimeLeft(target: Date): TimeLeft {
+  const diff = target.getTime() - Date.now()
   if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 }
   return {
-    days: Math.floor(diff / 86400000),
-    hours: Math.floor((diff % 86400000) / 3600000),
+    days:    Math.floor(diff / 86400000),
+    hours:   Math.floor((diff % 86400000) / 3600000),
     minutes: Math.floor((diff % 3600000) / 60000),
     seconds: Math.floor((diff % 60000) / 1000),
   }
+}
+
+function getNextDeadline(now: Date): WildcardDeadline | null {
+  return WILDCARD_DEADLINES.find(d => now < d.deadline) ?? null
 }
 
 function Unit({ value, label }: { value: number; label: string }) {
@@ -44,45 +48,68 @@ function Unit({ value, label }: { value: number; label: string }) {
 }
 
 export default function CountdownTimer() {
-  const [time, setTime] = useState<TimeLeft>(calcTimeLeft())
-  const [started, setStarted] = useState(false)
+  const [now, setNow] = useState<Date | null>(null)
 
   useEffect(() => {
-    setStarted(true)
-    const id = setInterval(() => setTime(calcTimeLeft()), 1000)
+    setNow(new Date())
+    const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  if (!started) return null
+  if (!now) return null
 
-  const isLive = WC_START <= new Date()
+  // Before tournament: countdown to kick-off
+  if (now < WC_START) {
+    const time = calcTimeLeft(WC_START)
+    return (
+      <div className="text-center">
+        <p className="text-white/50 text-sm uppercase tracking-widest mb-3">Tournament begins in</p>
+        <div className="flex justify-center gap-3 flex-wrap">
+          <Unit value={time.days}    label="Days"    />
+          <Unit value={time.hours}   label="Hours"   />
+          <Unit value={time.minutes} label="Minutes" />
+          <Unit value={time.seconds} label="Seconds" />
+        </div>
+      </div>
+    )
+  }
 
-  return (
-    <div className="text-center">
-      {isLive ? (
-        <p
-          style={{
-            fontFamily: 'Impact, sans-serif',
-            fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
-            background: 'linear-gradient(90deg, #F5C518, #D72638)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-          }}
-        >
-          🔴 THE WORLD CUP IS LIVE!
+  // Tournament live — show next wildcard deadline if one exists
+  const next = getNextDeadline(now)
+  if (next) {
+    const time = calcTimeLeft(next.deadline)
+    return (
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 mb-3">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-white/50 text-sm uppercase tracking-widest">Tournament live</span>
+        </div>
+        <p className="text-white/60 text-xs uppercase tracking-widest mb-2">
+          🃏 Wildcard closes for <strong className="text-white/80">{next.label}</strong> in
         </p>
-      ) : (
-        <>
-          <p className="text-white/50 text-sm uppercase tracking-widest mb-3">Tournament begins in</p>
-          <div className="flex justify-center gap-3 flex-wrap">
-            <Unit value={time.days}    label="Days"    />
-            <Unit value={time.hours}   label="Hours"   />
-            <Unit value={time.minutes} label="Minutes" />
-            <Unit value={time.seconds} label="Seconds" />
-          </div>
-        </>
-      )}
-    </div>
+        <div className="flex justify-center gap-3 flex-wrap">
+          <Unit value={time.days}    label="Days"    />
+          <Unit value={time.hours}   label="Hours"   />
+          <Unit value={time.minutes} label="Minutes" />
+          <Unit value={time.seconds} label="Seconds" />
+        </div>
+      </div>
+    )
+  }
+
+  // All deadlines passed
+  return (
+    <p
+      style={{
+        fontFamily: 'Impact, sans-serif',
+        fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
+        background: 'linear-gradient(90deg, #F5C518, #D72638)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+        backgroundClip: 'text',
+      }}
+    >
+      🔴 THE WORLD CUP IS LIVE!
+    </p>
   )
 }

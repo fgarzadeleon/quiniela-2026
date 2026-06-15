@@ -32,7 +32,7 @@ export interface Pick {
   scorer3?: string
   password_hash?: string
   wildcard_used?: boolean
-  wildcard_used_at?: string
+  wildcard_used_at?: string | null
   wildcard_effective_from?: MatchStage
   wildcard_old_team1?: string
   wildcard_old_team2?: string
