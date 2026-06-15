@@ -78,6 +78,11 @@ export default function CountdownTimer() {
   const next = getNextDeadline(now)
   if (next) {
     const time = calcTimeLeft(next.deadline)
+    const deadlineLocal = next.deadline.toLocaleString(undefined, {
+      day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit',
+      timeZoneName: 'short',
+    })
     return (
       <div className="text-center">
         <div className="inline-flex items-center gap-2 mb-3">
@@ -93,6 +98,7 @@ export default function CountdownTimer() {
           <Unit value={time.minutes} label="Minutes" />
           <Unit value={time.seconds} label="Seconds" />
         </div>
+        <p className="text-white/30 text-xs mt-3 tabular-nums">{deadlineLocal}</p>
       </div>
     )
   }

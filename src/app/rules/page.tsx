@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import Flag from '@/components/Flag'
+import WildcardDeadlinesTable from '@/components/WildcardDeadlinesTable'
 import { TEAMS } from '@/lib/teams'
 import { Tier } from '@/types'
 
@@ -135,14 +136,19 @@ export default function RulesPage() {
         </Section>
 
         <Section title="6. THE WILDCARD 🃏">
-          <ul className="space-y-2">
+          <ul className="space-y-2 mb-5">
             <Rule>Each player gets <strong className="text-white">one Wildcard</strong> for the entire tournament.</Rule>
             <Rule>Using it lets you <strong className="text-white">keep 2 of your 5 teams</strong> and swap the other 3 for any new teams you want.</Rule>
             <Rule>You can also update your 3 scorers when you play your Wildcard.</Rule>
             <Rule>Budget and tier rules still apply to your new combination.</Rule>
-            <Rule>Use it any time after the tournament starts — but only once. Once it&apos;s gone, it&apos;s gone.</Rule>
-            <Rule>If you&apos;re happy with your picks, you never have to use it.</Rule>
+            <Rule>Only once. Once it&apos;s gone, it&apos;s gone. If you&apos;re happy with your picks, you never have to use it.</Rule>
+            <Rule>
+              <strong className="text-white">When you use it determines when your new teams start scoring.</strong>{' '}
+              New teams score from the next round or matchday after you submit — old teams keep the points they already earned.
+            </Rule>
           </ul>
+          <p className="text-white/40 text-[11px] uppercase tracking-wider mb-1">Wildcard deadlines (your local time)</p>
+          <WildcardDeadlinesTable />
         </Section>
 
         <Section title="7. ACCOUNTS &amp; PASSWORDS">

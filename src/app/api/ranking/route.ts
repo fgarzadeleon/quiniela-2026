@@ -49,6 +49,8 @@ const FD_TO_OURS: Record<string, string> = {
   'United States':      'USA',
   'Korea Republic':     'South Korea',
   "Côte d'Ivoire":      'Ivory Coast',
+  'Ivory Coast':        'Ivory Coast',
+  'Cape Verde Islands': 'Cape Verde',
   'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
   'Czechia':            'Czech Republic',
   'Congo DR':           'DR Congo',
