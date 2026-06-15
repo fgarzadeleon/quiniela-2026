@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Flag from '@/components/Flag'
 
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
@@ -21,6 +21,8 @@ const QUESTIONS: { key: string; label: string; desc: string; icon: string }[] = 
 ]
 
 type Answers = Record<string, Host>
+type HostCounts = { USA: number; Mexico: number; Canada: number; total: number }
+type StatsData = { questions: Record<string, HostCounts>; answers: Record<string, string | null> }
 
 export default function HostsPage() {
   const [stage, setStage] = useState<'login' | 'form' | 'done'>('login')
@@ -29,7 +31,16 @@ export default function HostsPage() {
   const [answers, setAnswers] = useState<Answers>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [stats, setStats] = useState<StatsData | null>(null)
   const isClosed = new Date() >= DEADLINE
+
+  useEffect(() => {
+    if (!isClosed) return
+    fetch('/api/host-predictions/stats')
+      .then(r => r.json())
+      .then(d => { if (!d.locked) setStats(d) })
+      .catch(() => {})
+  }, [isClosed])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -194,6 +205,44 @@ export default function HostsPage() {
                     )
                   })}
                 </div>
+
+                {/* Percentage bars — visible after deadline */}
+                {stats && (() => {
+                  const counts = stats.questions[q.key]
+                  const correct = stats.answers[q.key]
+                  if (!counts || counts.total === 0) return null
+                  return (
+                    <div className="mt-4 space-y-1.5">
+                      {HOSTS.map(h => {
+                        const n = counts[h.name as keyof HostCounts] as number
+                        const pct = Math.round((n / counts.total) * 100)
+                        const isCorrect = correct === h.name
+                        const isMyPick = answers[q.key] === h.name
+                        return (
+                          <div key={h.name} className="flex items-center gap-2 text-xs">
+                            <span className="w-14 text-white/50 shrink-0 flex items-center gap-1">
+                              <Flag code={h.code} name={h.name} size={14} /> {h.name}
+                            </span>
+                            <div className="flex-1 rounded-full overflow-hidden h-2" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${pct}%`,
+                                  background: isCorrect ? '#4ACA6A' : isMyPick ? '#F5C518' : 'rgba(255,255,255,0.25)',
+                                }}
+                              />
+                            </div>
+                            <span className="w-8 text-right tabular-nums" style={{ color: isCorrect ? '#4ACA6A' : isMyPick ? '#F5C518' : 'rgba(255,255,255,0.4)' }}>
+                              {pct}%
+                            </span>
+                            {isCorrect && <span className="text-[10px] text-[#4ACA6A]">✓</span>}
+                          </div>
+                        )
+                      })}
+                      <p className="text-white/20 text-[10px] pt-0.5">{counts.total} picks total</p>
+                    </div>
+                  )
+                })()}
               </div>
             ))}
 
