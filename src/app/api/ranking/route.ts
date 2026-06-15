@@ -262,9 +262,11 @@ export async function GET() {
 
       if (tournamentStarted) {
         if (isWcPending && p.wildcard_used_at) {
-          // New teams not revealed yet — show old lineup with pre-wildcard points only
-          const wcTime = new Date(p.wildcard_used_at)
-          const preWcMatches = matches.filter(m => new Date(m.match_date) < wcTime)
+          // New teams not revealed yet — show old lineup with pre-effective-stage points only
+          // Use the matchday boundary rather than the raw submission time
+          const nextD = WILDCARD_DEADLINES.find(d => d.deadline > new Date(p.wildcard_used_at!))
+          const splitTime = nextD?.deadline ?? new Date(p.wildcard_used_at)
+          const preWcMatches = matches.filter(m => new Date(m.match_date) < splitTime)
           const oldPick: Pick = {
             ...p,
             team1: p.wildcard_old_team1 ?? p.team1,

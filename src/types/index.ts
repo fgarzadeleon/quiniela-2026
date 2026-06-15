@@ -45,7 +45,7 @@ export interface Pick {
 }
 
 export type MatchStatus = 'SCHEDULED' | 'IN_PLAY' | 'PAUSED' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT' | 'FINISHED' | 'SUSPENDED' | 'POSTPONED'
-export type MatchStage = 'GROUP_STAGE' | 'ROUND_OF_32' | 'ROUND_OF_16' | 'QUARTER_FINALS' | 'SEMI_FINALS' | 'FINAL'
+export type MatchStage = 'GROUP_STAGE' | 'GROUP_STAGE_MD2' | 'GROUP_STAGE_MD3' | 'ROUND_OF_32' | 'ROUND_OF_16' | 'QUARTER_FINALS' | 'SEMI_FINALS' | 'FINAL'
 
 export interface Match {
   id: string

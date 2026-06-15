@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-import { getCurrentRound, getNextRound } from '@/lib/scoring'
+import { getCurrentRound, getNextRound, getNextWildcardDeadline } from '@/lib/scoring'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
 const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, wildcard_used, wildcard_effective_from, total_points, created_at'
 
@@ -165,11 +165,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   const now = new Date()
-  const currentRound = getCurrentRound(now)
-  // Group stage wildcard: scoring splits per match date (using wildcard_used_at), not by stage
-  const wildcardEffectiveFrom = currentRound === 'GROUP_STAGE'
-    ? 'GROUP_STAGE'
-    : (getNextRound(currentRound) ?? currentRound)
+  // Use the next deadline's effectiveStage (GROUP_STAGE_MD2, GROUP_STAGE_MD3, ROUND_OF_32, etc.)
+  const nextDeadline = getNextWildcardDeadline(now)
+  const wildcardEffectiveFrom = nextDeadline?.effectiveStage ?? (getNextRound(getCurrentRound(now)) ?? getCurrentRound(now))
 
   const { data: updated, error: updateErr } = await supabase
     .from('picks')

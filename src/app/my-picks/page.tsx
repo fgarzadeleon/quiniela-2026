@@ -4,7 +4,7 @@ import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } f
 import Flag from '@/components/Flag'
 import PlayerSelect, { TeamSquad } from '@/components/PlayerSelect'
 import { Tier } from '@/types'
-import { WILDCARD_DEADLINES, getNextWildcardDeadline } from '@/lib/scoring'
+import { WILDCARD_DEADLINES, getNextWildcardDeadline, type WildcardDeadline } from '@/lib/scoring'
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })

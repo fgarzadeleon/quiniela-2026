@@ -14,19 +14,26 @@ export const ROUND_STARTS: Array<[MatchStage, Date]> = [
 export interface WildcardDeadline {
   label: string
   deadline: Date
-  stage: MatchStage
+  stage: MatchStage         // scoring stage (for pills, scoring grouping)
+  effectiveStage: MatchStage // stored in wildcard_effective_from
 }
 
-// Wildcard deadline windows for display — group stage split into matchdays
+// Wildcard deadline windows — each row: "use before deadline → new teams effective from effectiveStage"
 export const WILDCARD_DEADLINES: WildcardDeadline[] = [
-  { label: 'Group Stage, Matchday 2', deadline: new Date('2026-06-18T16:00:00Z'), stage: 'GROUP_STAGE' },
-  { label: 'Group Stage, Matchday 3', deadline: new Date('2026-06-24T19:00:00Z'), stage: 'GROUP_STAGE' },
-  { label: 'Round of 32',             deadline: new Date('2026-06-28T19:00:00Z'), stage: 'ROUND_OF_32' },
-  { label: 'Round of 16',             deadline: new Date('2026-07-04T17:00:00Z'), stage: 'ROUND_OF_16' },
-  { label: 'Quarter Finals',          deadline: new Date('2026-07-09T20:00:00Z'), stage: 'QUARTER_FINALS' },
-  { label: 'Semi Finals',             deadline: new Date('2026-07-14T19:00:00Z'), stage: 'SEMI_FINALS' },
-  { label: 'Final',                   deadline: new Date('2026-07-19T19:00:00Z'), stage: 'FINAL' },
+  { label: 'Group Stage, Matchday 2', deadline: new Date('2026-06-18T16:00:00Z'), stage: 'GROUP_STAGE', effectiveStage: 'GROUP_STAGE_MD2' },
+  { label: 'Group Stage, Matchday 3', deadline: new Date('2026-06-24T19:00:00Z'), stage: 'GROUP_STAGE', effectiveStage: 'GROUP_STAGE_MD3' },
+  { label: 'Round of 32',             deadline: new Date('2026-06-28T19:00:00Z'), stage: 'ROUND_OF_32', effectiveStage: 'ROUND_OF_32'     },
+  { label: 'Round of 16',             deadline: new Date('2026-07-04T17:00:00Z'), stage: 'ROUND_OF_16', effectiveStage: 'ROUND_OF_16'     },
+  { label: 'Quarter Finals',          deadline: new Date('2026-07-09T20:00:00Z'), stage: 'QUARTER_FINALS', effectiveStage: 'QUARTER_FINALS' },
+  { label: 'Semi Finals',             deadline: new Date('2026-07-14T19:00:00Z'), stage: 'SEMI_FINALS', effectiveStage: 'SEMI_FINALS'     },
+  { label: 'Final',                   deadline: new Date('2026-07-19T19:00:00Z'), stage: 'FINAL',        effectiveStage: 'FINAL'           },
 ]
+
+// Exact UTC start time for each matchday-level effective stage
+const MD_SPLIT_DATES: Partial<Record<MatchStage, Date>> = {
+  GROUP_STAGE_MD2: new Date('2026-06-18T16:00:00Z'),
+  GROUP_STAGE_MD3: new Date('2026-06-24T19:00:00Z'),
+}
 
 export function getNextWildcardDeadline(now: Date = new Date()): WildcardDeadline | null {
   return WILDCARD_DEADLINES.find(d => now < d.deadline) ?? null
@@ -69,8 +76,14 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
   const finishedMatches = matches.filter(m => m.status === 'FINISHED' || LIVE.has(m.status))
 
   const hasWildcardData = pick.wildcard_used && pick.wildcard_effective_from && pick.wildcard_old_team1
-  const isGroupStageWildcard = hasWildcardData && pick.wildcard_effective_from === 'GROUP_STAGE'
-  const wcUsedAt = (isGroupStageWildcard && pick.wildcard_used_at) ? new Date(pick.wildcard_used_at) : null
+  const effectiveFrom = pick.wildcard_effective_from
+  const isGroupStageWildcard = hasWildcardData && (
+    effectiveFrom === 'GROUP_STAGE' || effectiveFrom === 'GROUP_STAGE_MD2' || effectiveFrom === 'GROUP_STAGE_MD3'
+  )
+  // Resolve the group-stage split date: prefer the matchday boundary, fall back to exact submission time
+  const wcSplitDate: Date | null = isGroupStageWildcard
+    ? (MD_SPLIT_DATES[effectiveFrom!] ?? (pick.wildcard_used_at ? new Date(pick.wildcard_used_at) : null))
+    : null
 
   const currentSet = new Set([pick.team1, pick.team2, pick.team3, pick.team4, pick.team5].filter(Boolean))
   const swappedOutNames = hasWildcardData
@@ -102,9 +115,9 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
     if (stageMatches.length === 0) continue
 
     // Group-stage wildcard: score each match against whichever teams were active at that time
-    if (stage === 'GROUP_STAGE' && isGroupStageWildcard && wcUsedAt) {
-      const preWc  = stageMatches.filter(m => new Date(m.match_date) <  wcUsedAt)
-      const postWc = stageMatches.filter(m => new Date(m.match_date) >= wcUsedAt)
+    if (stage === 'GROUP_STAGE' && isGroupStageWildcard && wcSplitDate) {
+      const preWc  = stageMatches.filter(m => new Date(m.match_date) <  wcSplitDate)
+      const postWc = stageMatches.filter(m => new Date(m.match_date) >= wcSplitDate)
       const oldTeams = [pick.wildcard_old_team1!, pick.wildcard_old_team2!, pick.wildcard_old_team3!, pick.wildcard_old_team4!, pick.wildcard_old_team5!]
       const newTeams = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
 
