@@ -97,37 +97,21 @@ export default function ScorersPage() {
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {row.picks.map(p => {
-                        const isInvalid = p.valid === false
-                        return (
-                          <span
-                            key={p.name}
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            title={
-                              isInvalid ? 'This player is not in any of your selected teams — goals not counted'
-                              : !p.matched ? 'Name not found in tournament scorers — possible typo or player hasn\'t scored yet'
-                              : undefined
-                            }
-                            style={{
-                              background: isInvalid
-                                ? 'rgba(215,38,56,0.1)'
-                                : p.goals > 0
-                                ? 'rgba(74,202,106,0.15)'
-                                : p.matched
-                                ? 'rgba(255,255,255,0.05)'
-                                : 'rgba(245,158,11,0.12)',
-                              border: `1px solid ${isInvalid ? 'rgba(215,38,56,0.35)' : p.goals > 0 ? 'rgba(74,202,106,0.4)' : p.matched ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.35)'}`,
-                              color: isInvalid ? '#D72638' : p.goals > 0 ? '#4ACA6A' : p.matched ? 'rgba(255,255,255,0.5)' : '#F59E0B',
-                              textDecoration: isInvalid ? 'line-through' : 'none',
-                              opacity: isInvalid ? 0.7 : 1,
-                            }}
-                          >
-                            {p.name}{p.goals > 0 && !isInvalid && <strong> · {p.goals}⚽</strong>}
-                            {isInvalid && <span style={{ textDecoration: 'none' }}> · ❌</span>}
-                            {!isInvalid && !p.matched && <span className="opacity-60"> · ?</span>}
-                          </span>
-                        )
-                      })}
+                      {row.picks.filter(p => p.valid !== false).map(p => (
+                        <span
+                          key={p.name}
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          title={!p.matched ? 'Name not found in tournament scorers — possible typo or player hasn\'t scored yet' : undefined}
+                          style={{
+                            background: p.goals > 0 ? 'rgba(74,202,106,0.15)' : p.matched ? 'rgba(255,255,255,0.05)' : 'rgba(245,158,11,0.12)',
+                            border: `1px solid ${p.goals > 0 ? 'rgba(74,202,106,0.4)' : p.matched ? 'rgba(255,255,255,0.1)' : 'rgba(245,158,11,0.35)'}`,
+                            color: p.goals > 0 ? '#4ACA6A' : p.matched ? 'rgba(255,255,255,0.5)' : '#F59E0B',
+                          }}
+                        >
+                          {p.name}{p.goals > 0 && <strong> · {p.goals}⚽</strong>}
+                          {!p.matched && <span className="opacity-60"> · ?</span>}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 ))}
