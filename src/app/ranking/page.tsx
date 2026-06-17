@@ -45,6 +45,7 @@ interface RankedPick {
   total_points: number
   wildcard_used?: boolean
   host_bonus?: number
+  position_change?: number | null
 }
 
 const MEDAL = ['🥇', '🥈', '🥉']
@@ -254,8 +255,23 @@ export default function RankingPage() {
                   }}
                   className="rounded-xl p-4 flex items-start gap-4"
                 >
-                  <div className="text-2xl min-w-8 text-center">
-                    {i < 3 ? MEDAL[i] : <span className="text-white/40 text-lg font-bold">#{p.rank}</span>}
+                  <div className="flex flex-col items-center min-w-8">
+                    {i < 3 ? (
+                      <span className="text-2xl">{MEDAL[i]}</span>
+                    ) : (
+                      <span className="text-white/40 text-lg font-bold">#{p.rank}</span>
+                    )}
+                    {p.position_change != null && p.position_change !== 0 && (
+                      <span
+                        className="text-[10px] font-bold tabular-nums"
+                        style={{ color: p.position_change > 0 ? '#4ACA6A' : '#D72638' }}
+                      >
+                        {p.position_change > 0 ? `▲${p.position_change}` : `▼${Math.abs(p.position_change)}`}
+                      </span>
+                    )}
+                    {p.position_change === 0 && (
+                      <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>—</span>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-0">

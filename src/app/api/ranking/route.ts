@@ -216,19 +216,29 @@ export async function GET() {
   const supabase = createServerClient()
   const tournamentStarted = new Date() >= DEADLINE
 
+  const yesterday = new Date()
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1)
+  const yesterdayStr = yesterday.toISOString().slice(0, 10)
+
   const [
     { data: picks, error: pe },
     { matches, liveTeams },
     { data: hostPreds },
     { data: hostAnswers },
     scorerGoals,
+    { data: yesterdaySnapshot },
   ] = await Promise.all([
     supabase.from('picks').select('*'),
     fetchMatches(),
     supabase.from('host_predictions').select('pick_id, dirtiest, best, worst, most_goals_for, most_goals_against'),
     supabase.from('host_answers').select('key, value'),
     fetchScorerGoals(),
+    supabase.from('ranking_snapshots').select('pick_id, rank').eq('snapshot_date', yesterdayStr),
   ])
+
+  const yesterdayRankMap = new Map<string, number>(
+    (yesterdaySnapshot ?? []).map(r => [r.pick_id, r.rank])
+  )
 
   if (pe) {
     return NextResponse.json({ error: pe.message }, { status: 500 })
@@ -320,7 +330,10 @@ export async function GET() {
     .map((p, i) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password_hash, email, ...safe } = p
-      return { ...safe, rank: i + 1 }
+      const currentRank = i + 1
+      const prevRank = yesterdayRankMap.get(safe.id)
+      const position_change = prevRank != null ? prevRank - currentRank : null
+      return { ...safe, rank: currentRank, position_change }
     })
 
   const realPicks = (picks as Pick[]).filter(p => !p.name.toLowerCase().startsWith('test'))
