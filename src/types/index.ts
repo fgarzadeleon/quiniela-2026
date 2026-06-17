@@ -45,6 +45,7 @@ export interface Pick {
   total_cost: number
   total_points: number
   created_at: string
+  updated_at?: string
 }
 
 export type MatchStatus = 'SCHEDULED' | 'IN_PLAY' | 'PAUSED' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT' | 'FINISHED' | 'SUSPENDED' | 'POSTPONED'
