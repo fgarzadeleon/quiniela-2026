@@ -49,6 +49,10 @@ export default function PlayerSelect({
     players: filtered.filter(p => p.team === s.team),
   })).filter(g => g.players.length > 0)
 
+  // Warn if a non-empty value doesn't match any player in the loaded squads
+  const valueMatchesSquad = !value || allPlayers.some(p => norm(p.name).includes(norm(value)) || norm(value).includes(norm(p.name).split(' ').at(-1)!))
+  const showWarning = squads.length > 0 && value.trim().length > 2 && !valueMatchesSquad
+
   function select(name: string) {
     onChange(name)
     setQuery(name)
@@ -63,16 +67,22 @@ export default function PlayerSelect({
         value={query}
         onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
-        className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#F5C518]/50"
+        className="w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none"
+        style={{ borderColor: showWarning ? 'rgba(251,146,60,0.6)' : 'rgba(255,255,255,0.15)' }}
       />
+      {showWarning && (
+        <p className="text-[11px] mt-1 px-1" style={{ color: '#FB923C' }}>
+          ⚠️ &ldquo;{value}&rdquo; doesn&apos;t match anyone in your selected squads — scorers must play for one of your 5 teams.
+        </p>
+      )}
       {open && (
         <div
           className="absolute left-0 right-0 top-full mt-1 rounded-lg overflow-auto z-50 shadow-xl"
           style={{ background: '#0D1F4A', border: '1px solid rgba(255,255,255,0.15)', maxHeight: '220px' }}
         >
-          {grouped.length === 0 && (
-            <p className="px-3 py-2 text-white/40 text-sm">
-              No match — just type the name directly and it will be saved.
+          {grouped.length === 0 && query.length >= 1 && (
+            <p className="px-3 py-2 text-[#FB923C] text-sm">
+              ⚠️ No match in your squads — scorers must play for one of your 5 teams.
             </p>
           )}
           {grouped.map(g => (
