@@ -318,8 +318,9 @@ export async function GET() {
       return { ...safe, rank: i + 1 }
     })
 
-  const fun_stats = tournamentStarted ? computeFunStats(picks as Pick[], matches) : []
-  const team_table = tournamentStarted ? computeTeamTable(picks as Pick[], matches) : []
+  const realPicks = (picks as Pick[]).filter(p => !p.name.toLowerCase().startsWith('test'))
+  const fun_stats = tournamentStarted ? computeFunStats(realPicks, matches) : []
+  const team_table = tournamentStarted ? computeTeamTable(realPicks, matches) : []
 
   return NextResponse.json({ ranked, tournamentStarted, fun_stats, team_table, live_teams_global: [...liveTeams] })
 }
