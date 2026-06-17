@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
-
 import Flag from '@/components/Flag'
+import BumpsChart from '@/components/BumpsChart'
 
 interface TeamPoints { name: string; points: number }
 interface FunStat { icon: string; label: string; playerName: string; value: string }
@@ -127,8 +127,14 @@ export default function RankingPage() {
   const [error, setError] = useState('')
   const [tab, setTab] = useState<Tab>('ranking')
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
+  const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
 
   useEffect(() => {
+    fetch('/api/ranking/history')
+      .then(r => r.json())
+      .then(d => setHistory(d))
+      .catch(() => {})
+
     fetch('/api/ranking')
       .then(r => r.json())
       .then(d => {
@@ -418,6 +424,20 @@ export default function RankingPage() {
               </div>
             ))}
           </div>
+
+          {history && (
+            <div className="mb-10">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
+                  📈 RANKING MOVEMENT
+                </span>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+              </div>
+              <p className="text-white/40 text-xs mb-4">Position at the end of each matchday — hover a line to highlight</p>
+              <BumpsChart stages={history.stages} current={history.current} />
+            </div>
+          )}
 
           {hostStats && (
             <div>
