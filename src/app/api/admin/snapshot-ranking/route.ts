@@ -6,7 +6,8 @@ export const dynamic = 'force-dynamic'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 
 export async function POST(req: NextRequest) {
-  const { password } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
+  const { password, label = '' } = body
 
   if (!password || password !== ADMIN_PASSWORD) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -14,16 +15,19 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient()
 
-  // Check if today's snapshot already exists
   const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD UTC
+
+  // Check if this snapshot already exists (daily or labelled stage)
   const { data: existing } = await supabase
     .from('ranking_snapshots')
     .select('id')
     .eq('snapshot_date', today)
+    .eq('label', label)
     .limit(1)
 
   if (existing && existing.length > 0) {
-    return NextResponse.json({ ok: false, message: `Snapshot for ${today} already exists` })
+    const desc = label ? `${label} stage snapshot` : `daily snapshot`
+    return NextResponse.json({ ok: false, message: `${desc} for ${today} already exists` })
   }
 
   // Fetch current ranking from the live ranking API
@@ -46,6 +50,7 @@ export async function POST(req: NextRequest) {
     rank: p.rank,
     total_points: p.total_points,
     snapshot_date: today,
+    label,
   }))
 
   const { error } = await supabase.from('ranking_snapshots').insert(rows)
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     snapshot_date: today,
+    label: label || 'daily',
     captured: rows.length,
     top3: ranked.slice(0, 3).map(p => `#${p.rank} ${p.name} (${p.total_points}pts)`),
   })
