@@ -294,20 +294,25 @@ export async function GET() {
         total_points: matchPoints + host_bonus,
         team_points,
         old_team_points,
-        wildcard_pending: isWcPending,
         live_teams,
         // Before tournament: hide all picks
         ...(!tournamentStarted && {
           team1: null, team2: null, team3: null, team4: null, team5: null,
           scorer1: null, scorer2: null, scorer3: null,
         }),
-        // Pending wildcard: show old team lineup, hide new picks
+        // Pending wildcard: show old team lineup, strip ALL wildcard signals
         ...(isWcPending && tournamentStarted && {
           team1: p.wildcard_old_team1 ?? null,
           team2: p.wildcard_old_team2 ?? null,
           team3: p.wildcard_old_team3 ?? null,
           team4: p.wildcard_old_team4 ?? null,
           team5: p.wildcard_old_team5 ?? null,
+          wildcard_used: false,
+          wildcard_used_at: null,
+          wildcard_effective_from: null,
+          wildcard_old_team1: null, wildcard_old_team2: null,
+          wildcard_old_team3: null, wildcard_old_team4: null, wildcard_old_team5: null,
+          wildcard_old_scorer1: null, wildcard_old_scorer2: null, wildcard_old_scorer3: null,
         }),
       }
     })
@@ -319,8 +324,24 @@ export async function GET() {
     })
 
   const realPicks = (picks as Pick[]).filter(p => !p.name.toLowerCase().startsWith('test'))
-  const fun_stats = tournamentStarted ? computeFunStats(realPicks, matches) : []
-  const team_table = tournamentStarted ? computeTeamTable(realPicks, matches) : []
+
+  // For fun stats and team table: pending wildcard picks must use old teams,
+  // otherwise pick counts and stats would reveal the new team choice
+  const effectivePicks = realPicks.map(p => {
+    if (!p.wildcard_used || !p.wildcard_old_team1 || !p.wildcard_used_at) return p
+    const usedAt = new Date(p.wildcard_used_at)
+    const isPending = WILDCARD_DEADLINES.some(d => d.deadline > usedAt && now < d.deadline)
+    if (!isPending) return p
+    return {
+      ...p,
+      team1: p.wildcard_old_team1, team2: p.wildcard_old_team2 ?? p.team2,
+      team3: p.wildcard_old_team3 ?? p.team3, team4: p.wildcard_old_team4 ?? p.team4,
+      team5: p.wildcard_old_team5 ?? p.team5,
+    }
+  })
+
+  const fun_stats = tournamentStarted ? computeFunStats(effectivePicks, matches) : []
+  const team_table = tournamentStarted ? computeTeamTable(effectivePicks, matches) : []
 
   return NextResponse.json({ ranked, tournamentStarted, fun_stats, team_table, live_teams_global: [...liveTeams] })
 }
