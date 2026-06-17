@@ -4,7 +4,7 @@ import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
 import { getCurrentRound, getNextRound, getNextWildcardDeadline } from '@/lib/scoring'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
-const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, total_cost, wildcard_used, wildcard_effective_from, total_points, created_at'
+const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3, total_cost, total_points, created_at'
 
 function sortedKey(teams: string[]) {
   return [...teams].sort().join('|')
@@ -119,7 +119,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
   }
 
-  const { keepTeams, newTeam1, newTeam2, newTeam3 } = body
+  const { keepTeams, newTeam1, newTeam2, newTeam3, scorer1, scorer2, scorer3 } = body
   const keepList: string[] = Array.isArray(keepTeams) ? keepTeams : []
   const newTeams = [newTeam1, newTeam2, newTeam3].filter(Boolean)
 
@@ -183,6 +183,12 @@ export async function PATCH(req: NextRequest) {
       wildcard_old_team3: originalTeams[2],
       wildcard_old_team4: originalTeams[3],
       wildcard_old_team5: originalTeams[4],
+      wildcard_old_scorer1: pick.scorer1 || null,
+      wildcard_old_scorer2: pick.scorer2 || null,
+      wildcard_old_scorer3: pick.scorer3 || null,
+      scorer1: scorer1 || null,
+      scorer2: scorer2 || null,
+      scorer3: scorer3 || null,
     })
     .eq('id', pick.id)
     .select(SAFE_FIELDS)

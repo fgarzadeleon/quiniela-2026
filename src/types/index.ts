@@ -39,6 +39,9 @@ export interface Pick {
   wildcard_old_team3?: string
   wildcard_old_team4?: string
   wildcard_old_team5?: string
+  wildcard_old_scorer1?: string | null
+  wildcard_old_scorer2?: string | null
+  wildcard_old_scorer3?: string | null
   total_cost: number
   total_points: number
   created_at: string
