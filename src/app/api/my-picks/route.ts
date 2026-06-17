@@ -97,16 +97,19 @@ export async function PATCH(req: NextRequest) {
       } catch { /* FD unavailable — allow submission */ }
     }
 
-    // Duplicate combo check (exclude this player's own current picks)
+    // Duplicate combo check — also check wildcarded-away lineups so no two players
+    // ever share the same active team combination during any scoring period
     const { data: existing } = await supabase
       .from('picks')
-      .select('id, name, team1, team2, team3, team4, team5')
+      .select('id, name, team1, team2, team3, team4, team5, wildcard_used, wildcard_old_team1, wildcard_old_team2, wildcard_old_team3, wildcard_old_team4, wildcard_old_team5')
     const newKey = sortedKey(teams)
-    const duplicate = existing?.find(p =>
-      p.id !== pick.id &&
-      !p.name.toLowerCase().startsWith('test') &&
-      sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey
-    )
+    const duplicate = existing?.find(p => {
+      if (p.id === pick.id || p.name.toLowerCase().startsWith('test')) return false
+      if (sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey) return true
+      if (p.wildcard_used && p.wildcard_old_team1 &&
+          sortedKey([p.wildcard_old_team1, p.wildcard_old_team2, p.wildcard_old_team3, p.wildcard_old_team4, p.wildcard_old_team5]) === newKey) return true
+      return false
+    })
     if (duplicate) {
       return NextResponse.json({ error: 'These 5 teams were already picked by someone else!' }, { status: 400 })
     }
@@ -166,16 +169,18 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Too many elite-tier teams' }, { status: 400 })
   }
 
-  // Duplicate combo check (exclude own picks)
+  // Duplicate combo check — also check wildcarded-away lineups
   const { data: existing } = await supabase
     .from('picks')
-    .select('id, name, team1, team2, team3, team4, team5')
+    .select('id, name, team1, team2, team3, team4, team5, wildcard_used, wildcard_old_team1, wildcard_old_team2, wildcard_old_team3, wildcard_old_team4, wildcard_old_team5')
   const newKey = sortedKey(allFive)
-  const duplicate = existing?.find(p =>
-    p.id !== pick.id &&
-    !p.name.toLowerCase().startsWith('test') &&
-    sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey
-  )
+  const duplicate = existing?.find(p => {
+    if (p.id === pick.id || p.name.toLowerCase().startsWith('test')) return false
+    if (sortedKey([p.team1, p.team2, p.team3, p.team4, p.team5]) === newKey) return true
+    if (p.wildcard_used && p.wildcard_old_team1 &&
+        sortedKey([p.wildcard_old_team1, p.wildcard_old_team2, p.wildcard_old_team3, p.wildcard_old_team4, p.wildcard_old_team5]) === newKey) return true
+    return false
+  })
   if (duplicate) {
     return NextResponse.json({ error: 'These 5 teams were already picked by someone else!' }, { status: 400 })
   }

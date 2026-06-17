@@ -270,9 +270,6 @@ export default function RankingPage() {
                             ● LIVE
                           </span>
                         )}
-                        {p.wildcard_used && !p.wildcard_pending && (p.old_team_points?.length ?? 0) === 0 && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/20 text-white/40">wildcard used</span>
-                        )}
                         {(p.host_bonus ?? 0) > 0 && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]">🏟️ +{p.host_bonus}pts</span>
                         )}
@@ -310,14 +307,6 @@ export default function RankingPage() {
                               })
                           })()}
                         </div>
-                        {/* Pending wildcard notice */}
-                        {p.wildcard_pending && (
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[10px] px-2 py-0.5 rounded border border-[#F5C518]/30 text-[#F5C518]/70">
-                              🃏 wildcard queued — new teams reveal next matchday
-                            </span>
-                          </div>
-                        )}
                       </div>
                     ) : !tournamentStarted ? (
                       <div className="flex gap-1.5 mt-2">
