@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { fetchSquadMap, isValidScorer } from '@/lib/squad-validation'
 
 export const dynamic = 'force-dynamic'
 
@@ -74,16 +75,27 @@ export async function GET() {
   const supabase = createServerClient()
   const { data: picks } = await supabase
     .from('picks')
-    .select('name, scorer1, scorer2, scorer3')
+    .select('name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3')
     .not('name', 'ilike', 'test%')
     .order('created_at', { ascending: true })
+
+  // Fetch squad data so we can flag scorers not in the player's teams
+  let squadMap = new Map<string, string[]>()
+  if (FD_KEY) {
+    try { squadMap = await fetchSquadMap(FD_KEY) } catch { /* skip validation */ }
+  }
 
   const quinielaScorers = (picks ?? [])
     .filter(p => p.scorer1 || p.scorer2 || p.scorer3)
     .map(p => {
+      const teams = [p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean)
       const scorerPicks = [p.scorer1, p.scorer2, p.scorer3]
         .filter(Boolean)
-        .map(name => ({ name: name!, ...lookupScorer(name!, goalsMap) }))
+        .map(name => {
+          const valid = squadMap.size === 0 || isValidScorer(name!, teams, squadMap)
+          const { goals, matched } = valid ? lookupScorer(name!, goalsMap) : { goals: 0, matched: false }
+          return { name: name!, goals, matched, valid }
+        })
       return {
         playerName: p.name,
         picks: scorerPicks,

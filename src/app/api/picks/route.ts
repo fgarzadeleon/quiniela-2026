@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
+import { fetchSquadMap, invalidScorers } from '@/lib/squad-validation'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
+const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
 
 function sortedKey(teams: string[]) {
   return [...teams].sort().join('|')
@@ -41,6 +43,20 @@ export async function POST(req: NextRequest) {
 
   if (new Set(teams).size !== TEAMS_TO_PICK) {
     return NextResponse.json({ error: 'Duplicate teams not allowed' }, { status: 400 })
+  }
+
+  // Validate scorers belong to selected teams
+  if (FD_KEY) {
+    try {
+      const squadMap = await fetchSquadMap(FD_KEY)
+      const bad = invalidScorers([scorer1, scorer2, scorer3], teams, squadMap)
+      if (bad.length > 0) {
+        return NextResponse.json(
+          { error: `Scorer(s) not in your selected teams: ${bad.join(', ')}` },
+          { status: 400 }
+        )
+      }
+    } catch { /* FD unavailable — allow submission */ }
   }
 
   const supabase = createServerClient()

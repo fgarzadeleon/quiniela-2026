@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
 import { getCurrentRound, getNextRound, getNextWildcardDeadline } from '@/lib/scoring'
+import { fetchSquadMap, invalidScorers } from '@/lib/squad-validation'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
 const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3, total_cost, total_points, created_at'
 
@@ -79,6 +80,21 @@ export async function PATCH(req: NextRequest) {
     }
     if (new Set(teams).size !== TEAMS_TO_PICK) {
       return NextResponse.json({ error: 'Duplicate teams not allowed' }, { status: 400 })
+    }
+
+    // Validate scorers belong to selected teams
+    const fdKey = process.env.FOOTBALL_DATA_API_KEY
+    if (fdKey) {
+      try {
+        const squadMap = await fetchSquadMap(fdKey)
+        const bad = invalidScorers([scorer1, scorer2, scorer3], teams, squadMap)
+        if (bad.length > 0) {
+          return NextResponse.json(
+            { error: `Scorer(s) not in your selected teams: ${bad.join(', ')}` },
+            { status: 400 }
+          )
+        }
+      } catch { /* FD unavailable — allow submission */ }
     }
 
     // Duplicate combo check (exclude this player's own current picks)
@@ -162,6 +178,21 @@ export async function PATCH(req: NextRequest) {
   )
   if (duplicate) {
     return NextResponse.json({ error: 'These 5 teams were already picked by someone else!' }, { status: 400 })
+  }
+
+  // Validate scorers belong to the new team lineup
+  const fdKey = process.env.FOOTBALL_DATA_API_KEY
+  if (fdKey && (scorer1 || scorer2 || scorer3)) {
+    try {
+      const squadMap = await fetchSquadMap(fdKey)
+      const bad = invalidScorers([scorer1, scorer2, scorer3], allFive, squadMap)
+      if (bad.length > 0) {
+        return NextResponse.json(
+          { error: `Scorer(s) not in your new teams: ${bad.join(', ')}` },
+          { status: 400 }
+        )
+      }
+    } catch { /* FD unavailable — allow submission */ }
   }
 
   const now = new Date()
