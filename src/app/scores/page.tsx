@@ -1,6 +1,21 @@
 'use client'
 import { useEffect, useState } from 'react'
 
+interface HeatMatch {
+  id: number
+  utcDate: string
+  homeTeam: string
+  awayTeam: string
+  homePickers: number
+  awayPickers: number
+  affected: number
+  totalPlayers: number
+  heatScore: number
+  emoji: string
+  label: string
+  color: string
+}
+
 interface MatchScore {
   id: number
   utcDate: string
@@ -97,6 +112,8 @@ export default function ScoresPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [heatMatches, setHeatMatches] = useState<HeatMatch[]>([])
+
   useEffect(() => {
     async function load() {
       try {
@@ -110,7 +127,15 @@ export default function ScoresPage() {
         setLoading(false)
       }
     }
+    async function loadHeat() {
+      try {
+        const res = await fetch('/api/heat-index')
+        const data = await res.json()
+        setHeatMatches(data.matches ?? [])
+      } catch { /* silent */ }
+    }
     load()
+    loadHeat()
     const id = setInterval(load, 60_000)
     return () => clearInterval(id)
   }, [])
@@ -140,6 +165,63 @@ export default function ScoresPage() {
         </h1>
         <p className="text-white/40 text-xs mt-1">Auto-refreshes every 60 seconds</p>
       </div>
+
+      {/* Heat Index */}
+      {heatMatches.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
+              🌡️ HEAT INDEX
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          </div>
+          <p className="text-white/30 text-xs mb-4 text-center">How much each upcoming match affects the quiniela</p>
+          <div className="space-y-2">
+            {heatMatches.map(m => {
+              const kickoff = new Date(m.utcDate)
+              const timeStr = kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
+              const dateStr = kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-xl px-4 py-3 flex items-center gap-3"
+                  style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: `1px solid ${m.color}33` }}
+                >
+                  {/* Heat score */}
+                  <div className="flex flex-col items-center min-w-[52px]">
+                    <span className="text-xl leading-none">{m.emoji}</span>
+                    <span className="text-xs font-bold tabular-nums mt-0.5" style={{ color: m.color, fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>
+                      {m.heatScore}
+                    </span>
+                    <span className="text-[9px] text-white/30 uppercase tracking-wide leading-tight text-center">{m.label}</span>
+                  </div>
+
+                  {/* Match info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-sm truncate">{m.homeTeam} vs {m.awayTeam}</p>
+                    <p className="text-white/40 text-xs">{dateStr} · {timeStr} BST</p>
+                    <p className="text-xs mt-0.5" style={{ color: m.color }}>
+                      {m.affected} of {m.totalPlayers} players affected
+                      {m.homePickers > 0 && m.awayPickers > 0 && (
+                        <span className="text-white/30"> ({m.homePickers} + {m.awayPickers})</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Bar */}
+                  <div className="hidden sm:block w-24 h-1.5 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${m.heatScore}%`, background: m.color }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {loading && <div className="text-center text-white/40 py-20">Loading scores…</div>}
 
