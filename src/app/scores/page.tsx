@@ -17,6 +17,7 @@ interface MatchScore {
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   SCHEDULED:  { label: 'Upcoming',  color: '#2A4AB0' },
+  TIMED:      { label: 'Upcoming',  color: '#2A4AB0' },
   IN_PLAY:    { label: '🔴 LIVE',   color: '#D72638' },
   PAUSED:     { label: 'Half Time', color: '#F5C518' },
   FINISHED:   { label: 'Final',     color: '#1A6A2A' },
@@ -118,7 +119,7 @@ export default function ScoresPage() {
   const today = matches.filter(m => {
     const d = new Date(m.utcDate)
     const now = new Date()
-    return d.toDateString() === now.toDateString() && m.status === 'SCHEDULED'
+    return d.toDateString() === now.toDateString() && (m.status === 'SCHEDULED' || m.status === 'TIMED')
   })
   const finished = matches.filter(m => m.status === 'FINISHED')
 
