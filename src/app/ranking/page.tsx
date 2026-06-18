@@ -50,10 +50,16 @@ interface RankedPick {
 
 const MEDAL = ['🥇', '🥈', '🥉']
 
+const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
+  GROUP_STAGE_MD2: 'MD2', GROUP_STAGE_MD3: 'MD3',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
+  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'Final',
+}
+
 type SubStatus = 'normal' | 'subOut' | 'subIn'
 
-function TeamPointsPill({ name, points, live, sub = 'normal' }: {
-  name: string; points: number; live?: boolean; sub?: SubStatus
+function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel }: {
+  name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string
 }) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
@@ -66,7 +72,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal' }: {
         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
         style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)', opacity: 0.75 }}
       >
-        <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼</span>
+        <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
         <span style={{ color: 'rgba(255,255,255,0.45)' }}>{team.name}</span>
         <span className="font-bold tabular-nums" style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
@@ -82,7 +88,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal' }: {
         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
         style={{ background: 'rgba(74,202,106,0.1)', border: '1px solid rgba(74,202,106,0.3)' }}
       >
-        <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>▲</span>
+        <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>▲{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
         <span style={{ color: live ? '#FCA5A5' : '#4ACA6A' }}>{team.name}</span>
         <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
@@ -309,7 +315,8 @@ export default function RankingPage() {
                             {[...p.old_team_points!]
                               .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
                               .map(t => (
-                                <TeamPointsPill key={t.name} name={t.name} points={t.points} sub="subOut" />
+                                <TeamPointsPill key={t.name} name={t.name} points={t.points} sub="subOut"
+                                  wcLabel={p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined} />
                               ))}
                           </div>
                         )}
@@ -325,7 +332,8 @@ export default function RankingPage() {
                               .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
                               .map(t => {
                                 const sub: SubStatus = hasActiveSub && !oldSet.has(t.name) ? 'subIn' : 'normal'
-                                return <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} sub={sub} />
+                                return <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} sub={sub}
+                                  wcLabel={sub === 'subIn' && p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined} />
                               })
                           })()}
                         </div>
