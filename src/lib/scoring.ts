@@ -53,6 +53,67 @@ export function getNextRound(stage: MatchStage): MatchStage | null {
   return STAGE_ORDER[idx + 1] as MatchStage
 }
 
+// Compute which teams have confirmed qualification from the group stage.
+// Returns a map of teamName → date of their last group match (the "earned" date).
+// Top 2 per complete group qualify immediately; best-3rd-place only once all groups finish.
+export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date> {
+  // Group matches by group_name, track each team's points/GD/GF and last match date
+  const groups = new Map<string, Map<string, { pts: number; gd: number; gf: number; lastDate: Date }>>()
+
+  for (const m of groupMatches) {
+    const g = m.group_name
+    if (!g) continue
+    if (!groups.has(g)) groups.set(g, new Map())
+    const gMap = groups.get(g)!
+    const matchDate = new Date(m.match_date)
+
+    for (const [team, gf, ga] of [
+      [m.home_team, m.home_score, m.away_score],
+      [m.away_team, m.away_score, m.home_score],
+    ] as [string, number, number][]) {
+      if (!gMap.has(team)) gMap.set(team, { pts: 0, gd: 0, gf: 0, lastDate: new Date(0) })
+      const s = gMap.get(team)!
+      s.pts += gf > ga ? 3 : gf === ga ? 1 : 0
+      s.gd  += gf - ga
+      s.gf  += gf
+      if (matchDate > s.lastDate) s.lastDate = matchDate
+    }
+  }
+
+  const qualifiers = new Map<string, Date>()
+  const thirdPlace: Array<{ team: string; pts: number; gd: number; gf: number; lastDate: Date }> = []
+  let allComplete = true
+
+  for (const [, gMap] of groups) {
+    const matchCount = groupMatches.filter(m => {
+      const teams = [m.home_team, m.away_team]
+      return [...gMap.keys()].some(t => teams.includes(t))
+    }).length
+
+    const isComplete = matchCount >= 6 // 4-team group = 6 matches
+    if (!isComplete) { allComplete = false; continue }
+
+    const standings = [...gMap.entries()]
+      .map(([team, s]) => ({ team, ...s }))
+      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+
+    // Top 2 qualify directly
+    qualifiers.set(standings[0].team, standings[0].lastDate)
+    qualifiers.set(standings[1].team, standings[1].lastDate)
+    thirdPlace.push(standings[2])
+  }
+
+  // Best 8 third-place teams qualify — only determinable when all 12 groups complete
+  if (allComplete && thirdPlace.length === 12) {
+    thirdPlace
+      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+      .slice(0, 8)
+      .forEach(t => qualifiers.set(t.team, t.lastDate))
+  }
+
+  return qualifiers
+}
+
 function scoreTeamMatches(teamName: string, teamMatches: Match[]): number {
   if (teamMatches.length === 0) return 0
   const team = getTeam(teamName)
@@ -108,6 +169,20 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
   const byOldTeam = new Map<string, number>()
   for (const t of swappedOutNames) byOldTeam.set(t, 0)
 
+  // Group stage advancement bonus is computed from standings, not from R32 fixture availability.
+  // This ensures the bonus is attributed to the correct scoring period for wildcard splits.
+  const groupQualifiers = computeGroupQualifiers(finishedMatches.filter(m => m.stage === 'GROUP_STAGE'))
+
+  function addGroupAdvancementBonus(teamName: string, targetMap: Map<string, number> | null) {
+    if (!groupQualifiers.has(teamName)) return 0
+    const team = getTeam(teamName)
+    if (!team) return 0
+    const bonus = SCORING[team.tier].advanceRound
+    total += bonus
+    if (targetMap?.has(teamName)) targetMap.set(teamName, (targetMap.get(teamName) ?? 0) + bonus)
+    return bonus
+  }
+
   let total = 0
 
   for (const stage of STAGE_ORDER) {
@@ -124,17 +199,21 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       for (const teamName of oldTeams) {
         const pts = scoreTeamMatches(teamName, preWc.filter(m => m.home_team === teamName || m.away_team === teamName))
         total += pts
-        if (byOldTeam.has(teamName)) {
-          byOldTeam.set(teamName, (byOldTeam.get(teamName) ?? 0) + pts)
-        } else if (byTeam.has(teamName)) {
-          // Kept team: pre-wildcard group-stage points go into byTeam too
-          byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
-        }
+        const targetMap = byOldTeam.has(teamName) ? byOldTeam : byTeam.has(teamName) ? byTeam : null
+        if (targetMap?.has(teamName)) targetMap.set(teamName, (targetMap.get(teamName) ?? 0) + pts)
+
+        // Group advancement bonus for old team: only if their qualification date is before the split
+        const qualDate = groupQualifiers.get(teamName)
+        if (qualDate && qualDate < wcSplitDate) addGroupAdvancementBonus(teamName, targetMap)
       }
       for (const teamName of newTeams) {
         const pts = scoreTeamMatches(teamName, postWc.filter(m => m.home_team === teamName || m.away_team === teamName))
         total += pts
         if (byTeam.has(teamName)) byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
+
+        // Group advancement bonus for new team: only if their qualification date is on/after the split
+        const qualDate = groupQualifiers.get(teamName)
+        if (qualDate && qualDate >= wcSplitDate) addGroupAdvancementBonus(teamName, byTeam)
       }
       continue
     }
@@ -153,7 +232,10 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
 
       let pts = scoreTeamMatches(teamName, teamMatches)
 
-      if (stage !== 'GROUP_STAGE') {
+      // GROUP_STAGE: advancement handled via groupQualifiers above (not here)
+      // ROUND_OF_32: match results only — advancement was already counted in GROUP_STAGE
+      // R16+: advanceRound means "you won your previous knockout match to get here"
+      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') {
         pts += scoring.advanceRound
         if (stage === 'FINAL') {
           const finalMatch = teamMatches[0]
@@ -169,6 +251,15 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
         byOldTeam.set(teamName, (byOldTeam.get(teamName) ?? 0) + pts)
       } else if (!usingOldTeams && byTeam.has(teamName)) {
         byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
+      }
+    }
+
+    // For non-wildcard or post-wildcard GROUP_STAGE: add group advancement bonus per qualified team
+    if (stage === 'GROUP_STAGE' && !isGroupStageWildcard) {
+      for (const teamName of teams) {
+        if (!groupQualifiers.has(teamName)) continue
+        const targetMap = usingOldTeams ? byOldTeam : byTeam
+        addGroupAdvancementBonus(teamName, targetMap)
       }
     }
   }
