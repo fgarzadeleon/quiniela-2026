@@ -49,7 +49,7 @@ const STAGE_LABELS: Record<string, string> = {
   FINAL:          'Final',
 }
 
-function MatchCard({ match }: { match: MatchScore }) {
+function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
   const status = STATUS_LABELS[match.status] ?? { label: match.status, color: '#666' }
   const isLive = match.status === 'IN_PLAY' || match.status === 'PAUSED'
   const isFinished = match.status === 'FINISHED'
@@ -61,7 +61,7 @@ function MatchCard({ match }: { match: MatchScore }) {
         background: isLive
           ? 'linear-gradient(145deg, #1A0A0A, #2A0A0A)'
           : 'linear-gradient(145deg, #0D1F4A, #111827)',
-        border: `1px solid ${isLive ? '#D72638' : 'rgba(255,255,255,0.08)'}`,
+        border: `1px solid ${isLive ? '#D72638' : heat ? `${heat.color}44` : 'rgba(255,255,255,0.08)'}`,
         boxShadow: isLive ? '0 0 16px rgba(215,38,56,0.2)' : 'none',
       }}
       className="rounded-xl p-4"
@@ -71,17 +71,28 @@ function MatchCard({ match }: { match: MatchScore }) {
           {STAGE_LABELS[match.stage] ?? match.stage}
           {match.group ? ` · ${match.group}` : ''}
         </span>
-        <span
-          className="text-xs font-bold px-2 py-0.5 rounded-full"
-          style={{ background: `${status.color}22`, color: status.color }}
-        >
-          {status.label}
-        </span>
+        <div className="flex items-center gap-2">
+          {heat && (
+            <span className="flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full"
+              style={{ background: `${heat.color}22`, color: heat.color }}>
+              {heat.emoji} {heat.heatScore} · {heat.affected} players
+            </span>
+          )}
+          <span
+            className="text-xs font-bold px-2 py-0.5 rounded-full"
+            style={{ background: `${status.color}22`, color: status.color }}
+          >
+            {status.label}
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
         <div className="flex-1 text-right">
           <p className="font-bold text-white text-sm">{match.homeTeam.name}</p>
+          {heat && heat.homePickers > 0 && (
+            <p className="text-[10px] text-white/30">{heat.homePickers} picks</p>
+          )}
         </div>
 
         <div
@@ -101,6 +112,9 @@ function MatchCard({ match }: { match: MatchScore }) {
 
         <div className="flex-1 text-left">
           <p className="font-bold text-white text-sm">{match.awayTeam.name}</p>
+          {heat && heat.awayPickers > 0 && (
+            <p className="text-[10px] text-white/30">{heat.awayPickers} picks</p>
+          )}
         </div>
       </div>
     </div>
@@ -166,63 +180,6 @@ export default function ScoresPage() {
         <p className="text-white/40 text-xs mt-1">Auto-refreshes every 60 seconds</p>
       </div>
 
-      {/* Heat Index */}
-      {heatMatches.length > 0 && (
-        <div className="mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
-              🌡️ HEAT INDEX
-            </span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-          </div>
-          <p className="text-white/30 text-xs mb-4 text-center">How much each upcoming match affects the quiniela</p>
-          <div className="space-y-2">
-            {heatMatches.map(m => {
-              const kickoff = new Date(m.utcDate)
-              const timeStr = kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
-              const dateStr = kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
-              return (
-                <div
-                  key={m.id}
-                  className="rounded-xl px-4 py-3 flex items-center gap-3"
-                  style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: `1px solid ${m.color}33` }}
-                >
-                  {/* Heat score */}
-                  <div className="flex flex-col items-center min-w-[52px]">
-                    <span className="text-xl leading-none">{m.emoji}</span>
-                    <span className="text-xs font-bold tabular-nums mt-0.5" style={{ color: m.color, fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>
-                      {m.heatScore}
-                    </span>
-                    <span className="text-[9px] text-white/30 uppercase tracking-wide leading-tight text-center">{m.label}</span>
-                  </div>
-
-                  {/* Match info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white text-sm truncate">{m.homeTeam} vs {m.awayTeam}</p>
-                    <p className="text-white/40 text-xs">{dateStr} · {timeStr} BST</p>
-                    <p className="text-xs mt-0.5" style={{ color: m.color }}>
-                      {m.affected} of {m.totalPlayers} players affected
-                      {m.homePickers > 0 && m.awayPickers > 0 && (
-                        <span className="text-white/30"> ({m.homePickers} + {m.awayPickers})</span>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Bar */}
-                  <div className="hidden sm:block w-24 h-1.5 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${m.heatScore}%`, background: m.color }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {loading && <div className="text-center text-white/40 py-20">Loading scores…</div>}
 
       {error && (
@@ -255,7 +212,12 @@ export default function ScoresPage() {
           {today.length > 0 && (
             <div>
               <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-3">Today</h2>
-              <div className="grid gap-3 sm:grid-cols-2">{today.map(m => <MatchCard key={m.id} match={m} />)}</div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {today
+                  .map(m => ({ m, heat: heatMatches.find(h => h.homeTeam === m.homeTeam.name || h.awayTeam === m.awayTeam.name) }))
+                  .sort((a, b) => (b.heat?.heatScore ?? 0) - (a.heat?.heatScore ?? 0))
+                  .map(({ m, heat }) => <MatchCard key={m.id} match={m} heat={heat} />)}
+              </div>
             </div>
           )}
           {finished.length > 0 && (
