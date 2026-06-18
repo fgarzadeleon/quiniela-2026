@@ -261,10 +261,12 @@ export async function GET() {
         : 0
       const matchPoints = calculatePickPoints(p, matches)
 
-      // Wildcard is "pending" if used but the next matchday/round hasn't started yet
-      const isWcPending = !!(p.wildcard_used && p.wildcard_used_at && (() => {
-        const usedAt = new Date(p.wildcard_used_at!)
-        return WILDCARD_DEADLINES.some(d => d.deadline > usedAt && now < d.deadline)
+      // Wildcard is "pending" until the specific effective-stage deadline is reached.
+      // Must compare against wildcard_effective_from, NOT just any future deadline —
+      // otherwise a MD2 wildcard stays pending indefinitely because MD3 is also upcoming.
+      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
+        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+        return effectiveDeadline ? now < effectiveDeadline.deadline : false
       })())
 
       let team_points: { name: string; points: number }[] = []
