@@ -220,6 +220,43 @@ export default function ScoresPage() {
               </div>
             </div>
           )}
+
+          {heatMatches.length > 0 && (
+            <div>
+              <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-1">🌡️ Upcoming — Heat Index</h2>
+              <p className="text-white/30 text-xs mb-3">Next 48h matches ranked by quiniela impact</p>
+              <div className="space-y-2">
+                {heatMatches.map(m => {
+                  const kickoff = new Date(m.utcDate)
+                  const timeStr = kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
+                  const dateStr = kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+                  return (
+                    <div key={m.id} className="rounded-xl px-4 py-3 flex items-center gap-3"
+                      style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: `1px solid ${m.color}44` }}>
+                      <div className="flex flex-col items-center min-w-[48px]">
+                        <span className="text-lg leading-none">{m.emoji}</span>
+                        <span className="font-bold tabular-nums" style={{ color: m.color, fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>{m.heatScore}</span>
+                        <span className="text-[9px] text-white/30 uppercase tracking-wide text-center leading-tight">{m.label}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-white text-sm">{m.homeTeam} vs {m.awayTeam}</p>
+                        <p className="text-white/40 text-xs">{dateStr} · {timeStr} BST</p>
+                        <p className="text-xs mt-0.5" style={{ color: m.color }}>
+                          {m.affected} of {m.totalPlayers} players
+                          {(m.homePickers > 0 || m.awayPickers > 0) && (
+                            <span className="text-white/30"> · {m.homeTeam} {m.homePickers} / {m.awayTeam} {m.awayPickers}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="hidden sm:block w-20 h-1.5 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
+                        <div className="h-full rounded-full" style={{ width: `${m.heatScore}%`, background: m.color }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {finished.length > 0 && (
             <div>
               <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-3">Recent Results</h2>
