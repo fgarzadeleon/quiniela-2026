@@ -131,60 +131,61 @@ async function fetchFDIOLive(now: number): Promise<{ liveMatches: Match[]; liveT
 }
 
 async function fetchMatches(now: number): Promise<{ matches: Match[]; liveTeams: Set<string> }> {
-  const [fdResult, fdioResult] = await Promise.all([
-    (async () => {
-      if (!FD_KEY) return { matches: [] as Match[], liveTeams: new Set<string>() }
-      try {
-        const res = await fetch(`${FD_BASE}/competitions/WC/matches`, {
-          headers: { 'X-Auth-Token': FD_KEY },
-          next: { revalidate: 60 },
-        })
-        if (!res.ok) return { matches: [] as Match[], liveTeams: new Set<string>(), timedKeys: new Set<string>() }
-        const { matches = [] } = await res.json()
-        const liveTeams = new Set<string>()
-        const timedKeys = new Set<string>() // FD-verified upcoming matches for FDIO validation
-        const result: Match[] = []
-        for (const m of matches as Record<string, unknown>[]) {
-          const fdStatus = m.status as string
-          const homeTeam = m.homeTeam as Record<string, string>
-          const awayTeam = m.awayTeam as Record<string, string>
-          const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
-          const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
-          if (!home || !away) continue
-          // Track TIMED matches so we can validate FDIO live data against them
-          if (fdStatus === 'TIMED' || fdStatus === 'SCHEDULED') {
-            timedKeys.add(`${home}_${away}`)
-            continue
-          }
-          if (!SCOREABLE_STATUSES.has(fdStatus)) continue
-          const score = m.score as Record<string, Record<string, number | null>>
-          const homeScore = score?.fullTime?.home
-          const awayScore = score?.fullTime?.away
-          const stage = STAGE_MAP[m.stage as string]
-          if (homeScore == null || awayScore == null || !stage) continue
-          const isLive = LIVE_STATUSES.has(fdStatus)
-          if (isLive) { liveTeams.add(home); liveTeams.add(away) }
-          result.push({
-            id: String(m.id),
-            home_team: home,
-            away_team: away,
-            home_score: homeScore,
-            away_score: awayScore,
-            status: isLive ? 'IN_PLAY' : 'FINISHED',
-            match_date: m.utcDate as string,
-            stage,
-            group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
-          } as Match)
+  // FD is now primary with live subscription — handles IN_PLAY/PAUSED/FINISHED
+  // FDIO is fallback only if FD returns no scoreable matches at all
+  const fdResult = await (async () => {
+    if (!FD_KEY) return { matches: [] as Match[], liveTeams: new Set<string>(), timedKeys: new Set<string>() }
+    try {
+      const res = await fetch(`${FD_BASE}/competitions/WC/matches`, {
+        headers: { 'X-Auth-Token': FD_KEY },
+        next: { revalidate: 30 },
+      })
+      if (!res.ok) return { matches: [] as Match[], liveTeams: new Set<string>(), timedKeys: new Set<string>() }
+      const { matches = [] } = await res.json()
+      const liveTeams = new Set<string>()
+      const timedKeys = new Set<string>()
+      const result: Match[] = []
+      for (const m of matches as Record<string, unknown>[]) {
+        const fdStatus = m.status as string
+        const homeTeam = m.homeTeam as Record<string, string>
+        const awayTeam = m.awayTeam as Record<string, string>
+        const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
+        const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
+        if (!home || !away) continue
+        if (fdStatus === 'TIMED' || fdStatus === 'SCHEDULED') {
+          timedKeys.add(`${home}_${away}`)
+          continue
         }
-        return { matches: result, liveTeams, timedKeys }
-      } catch { return { matches: [] as Match[], liveTeams: new Set<string>(), timedKeys: new Set<string>() } }
-    })(),
-    fetchFDIOLive(now),
-  ])
+        if (!SCOREABLE_STATUSES.has(fdStatus)) continue
+        const score = m.score as Record<string, Record<string, number | null>>
+        const homeScore = score?.fullTime?.home
+        const awayScore = score?.fullTime?.away
+        const stage = STAGE_MAP[m.stage as string]
+        if (homeScore == null || awayScore == null || !stage) continue
+        const isLive = LIVE_STATUSES.has(fdStatus)
+        if (isLive) { liveTeams.add(home); liveTeams.add(away) }
+        result.push({
+          id: String(m.id),
+          home_team: home,
+          away_team: away,
+          home_score: homeScore,
+          away_score: awayScore,
+          status: isLive ? 'IN_PLAY' : 'FINISHED',
+          match_date: m.utcDate as string,
+          stage,
+          group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
+        } as Match)
+      }
+      return { matches: result, liveTeams, timedKeys }
+    } catch { return { matches: [] as Match[], liveTeams: new Set<string>(), timedKeys: new Set<string>() } }
+  })()
 
-  // Merge: only add FDIO live matches that:
-  // 1. Aren't already scored by FD as finished
-  // 2. Are verified in FD's TIMED schedule (prevents FDIO data errors like Austria/Australia swaps)
+  // Only fall back to FDIO if FD returned nothing at all (outage)
+  if (fdResult.matches.length > 0) {
+    return { matches: fdResult.matches, liveTeams: fdResult.liveTeams }
+  }
+
+  const fdioResult = await fetchFDIOLive(now)
   const fdMatchKeys = new Set(fdResult.matches.map(m => `${m.home_team}_${m.away_team}`))
   const extraLive = fdioResult.liveMatches.filter(m => {
     const key = `${m.home_team}_${m.away_team}`
