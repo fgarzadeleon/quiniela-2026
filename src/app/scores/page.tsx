@@ -1,5 +1,28 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { TEAM_MAP, SCORING } from '@/lib/teams'
+
+const FD_TO_OURS: Record<string, string> = {
+  'United States':      'USA',
+  'Korea Republic':     'South Korea',
+  "Côte d'Ivoire":      'Ivory Coast',
+  'Ivory Coast':        'Ivory Coast',
+  'Cape Verde Islands': 'Cape Verde',
+  'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
+  'Czechia':            'Czech Republic',
+  'Congo DR':           'DR Congo',
+  'Curaçao':            'Curacao',
+  'Türkiye':            'Turkey',
+}
+
+function teamPoints(fdName: string, gf: number, ga: number): number | null {
+  const ourName = FD_TO_OURS[fdName] ?? fdName
+  const team = TEAM_MAP.get(ourName)
+  if (!team) return null
+  const s = SCORING[team.tier]
+  const base = gf > ga ? s.win : gf === ga ? s.draw : s.loss
+  return base + gf * s.goalFor + ga * s.goalAgainst
+}
 
 interface HeatMatch {
   id: number
@@ -87,36 +110,54 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="flex-1 text-right">
-          <p className="font-bold text-white text-sm">{match.homeTeam.name}</p>
-          {heat && heat.homePickers > 0 && (
-            <p className="text-[10px] text-white/30">{heat.homePickers} picks</p>
-          )}
-        </div>
+      {(() => {
+        const hg = match.score.fullTime.home ?? 0
+        const ag = match.score.fullTime.away ?? 0
+        const homePts = hasScore ? teamPoints(match.homeTeam.name, hg, ag) : null
+        const awayPts = hasScore ? teamPoints(match.awayTeam.name, ag, hg) : null
+        return (
+          <div className="flex items-center gap-2">
+            <div className="flex-1 text-right">
+              <p className="font-bold text-white text-sm">{match.homeTeam.name}</p>
+              {homePts != null && (
+                <p className="text-xs font-bold tabular-nums" style={{ color: homePts > 0 ? '#4ACA6A' : homePts < 0 ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
+                  {homePts > 0 ? '+' : ''}{homePts} pts
+                </p>
+              )}
+              {heat && heat.homePickers > 0 && (
+                <p className="text-[10px] text-white/30">{heat.homePickers} picks</p>
+              )}
+            </div>
 
-        <div
-          className="text-center px-3 py-1 rounded-lg min-w-16"
-          style={{ background: hasScore ? 'rgba(255,255,255,0.08)' : 'transparent' }}
-        >
-          {hasScore ? (
-            <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', letterSpacing: '0.1em' }}>
-              {match.score.fullTime.home ?? 0} – {match.score.fullTime.away ?? 0}
-            </span>
-          ) : (
-            <span className="text-white/40 text-sm">
-              {new Date(match.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
-        </div>
+            <div
+              className="text-center px-3 py-1 rounded-lg min-w-16"
+              style={{ background: hasScore ? 'rgba(255,255,255,0.08)' : 'transparent' }}
+            >
+              {hasScore ? (
+                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', letterSpacing: '0.1em' }}>
+                  {hg} – {ag}
+                </span>
+              ) : (
+                <span className="text-white/40 text-sm">
+                  {new Date(match.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
 
-        <div className="flex-1 text-left">
-          <p className="font-bold text-white text-sm">{match.awayTeam.name}</p>
-          {heat && heat.awayPickers > 0 && (
-            <p className="text-[10px] text-white/30">{heat.awayPickers} picks</p>
-          )}
-        </div>
-      </div>
+            <div className="flex-1 text-left">
+              <p className="font-bold text-white text-sm">{match.awayTeam.name}</p>
+              {awayPts != null && (
+                <p className="text-xs font-bold tabular-nums" style={{ color: awayPts > 0 ? '#4ACA6A' : awayPts < 0 ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
+                  {awayPts > 0 ? '+' : ''}{awayPts} pts
+                </p>
+              )}
+              {heat && heat.awayPickers > 0 && (
+                <p className="text-[10px] text-white/30">{heat.awayPickers} picks</p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
