@@ -58,8 +58,21 @@ const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
 
 type SubStatus = 'normal' | 'subOut' | 'subIn'
 
-function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel }: {
-  name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string
+function FormDots({ form }: { form?: Array<'W' | 'D' | 'L'> }) {
+  if (!form || form.length === 0) return null
+  const colors: Record<string, string> = { W: '#4ACA6A', D: 'rgba(255,255,255,0.35)', L: '#D72638' }
+  return (
+    <span className="flex items-center gap-0.5">
+      {form.map((r, i) => (
+        <span key={i} title={r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
+          style={{ width: 6, height: 6, borderRadius: '50%', background: colors[r], display: 'inline-block', flexShrink: 0 }} />
+      ))}
+    </span>
+  )
+}
+
+function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
+  name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string; form?: Array<'W' | 'D' | 'L'>
 }) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
@@ -75,6 +88,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel }: {
         <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
         <span style={{ color: 'rgba(255,255,255,0.45)' }}>{team.name}</span>
+        <FormDots form={form} />
         <span className="font-bold tabular-nums" style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
           {points > 0 ? '+' : ''}{points}
         </span>
@@ -91,6 +105,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel }: {
         <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>▲{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
         <span style={{ color: live ? '#FCA5A5' : '#4ACA6A' }}>{team.name}</span>
+        <FormDots form={form} />
         <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
           {points > 0 ? '+' : ''}{points}
         </span>
@@ -112,6 +127,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel }: {
       <span style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
         {team.name}
       </span>
+      <FormDots form={form} />
       <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
         {points > 0 ? '+' : ''}{points}
       </span>
@@ -134,8 +150,11 @@ export default function RankingPage() {
   const [tab, setTab] = useState<Tab>('ranking')
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
   const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
+  const [teamForm, setTeamForm] = useState<Record<string, Array<'W' | 'D' | 'L'>>>({})
 
   useEffect(() => {
+    fetch('/api/team-form').then(r => r.json()).then(d => setTeamForm(d.form ?? {})).catch(() => {})
+
     fetch('/api/ranking/history')
       .then(r => r.json())
       .then(d => setHistory(d))
@@ -316,7 +335,8 @@ export default function RankingPage() {
                               .sort((a, b) => (TEAM_MAP.get(b.name)?.cost ?? 0) - (TEAM_MAP.get(a.name)?.cost ?? 0))
                               .map(t => (
                                 <TeamPointsPill key={t.name} name={t.name} points={t.points} sub="subOut"
-                                  wcLabel={p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined} />
+                                  wcLabel={p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined}
+                                  form={teamForm[t.name]} />
                               ))}
                           </div>
                         )}
@@ -333,7 +353,8 @@ export default function RankingPage() {
                               .map(t => {
                                 const sub: SubStatus = hasActiveSub && !oldSet.has(t.name) ? 'subIn' : 'normal'
                                 return <TeamPointsPill key={t.name} name={t.name} points={t.points} live={p.live_teams?.includes(t.name)} sub={sub}
-                                  wcLabel={sub === 'subIn' && p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined} />
+                                  wcLabel={sub === 'subIn' && p.wildcard_effective_from ? EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] : undefined}
+                                  form={teamForm[t.name]} />
                               })
                           })()}
                         </div>
