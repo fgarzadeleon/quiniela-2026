@@ -31,8 +31,11 @@ interface HeatMatch {
   awayTeam: string
   homePickers: number
   awayPickers: number
+  homePickerNames: string[]
+  awayPickerNames: string[]
   affected: number
   totalPlayers: number
+  maxPtsAtStake: number
   heatScore: number
   emoji: string
   label: string
@@ -168,6 +171,8 @@ export default function ScoresPage() {
   const [error, setError] = useState('')
 
   const [heatMatches, setHeatMatches] = useState<HeatMatch[]>([])
+  const [heatVerdict, setHeatVerdict] = useState('')
+  const [heatDate, setHeatDate] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -187,6 +192,11 @@ export default function ScoresPage() {
         const res = await fetch('/api/heat-index')
         const data = await res.json()
         setHeatMatches(data.matches ?? [])
+        setHeatVerdict(data.verdict ?? '')
+        if ((data.matches ?? []).length > 0) {
+          const first = new Date(data.matches[0].utcDate)
+          setHeatDate(first.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' }))
+        }
       } catch { /* silent */ }
     }
     load()
@@ -263,39 +273,72 @@ export default function ScoresPage() {
           )}
 
           {heatMatches.length > 0 && (
-            <div>
-              <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-1">🌡️ Upcoming — Heat Index</h2>
-              <p className="text-white/30 text-xs mb-3">Next 48h matches ranked by quiniela impact</p>
-              <div className="space-y-2">
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #0a1628, #0f1f3d)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {/* Header */}
+              <div className="px-5 pt-5 pb-3 border-b border-white/5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/30 mb-0.5">🌡️ Heat Index</p>
+                <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.1rem', letterSpacing: '0.03em', color: 'rgba(255,255,255,0.85)' }}>
+                  Quiniela 2026 — {heatDate}
+                </h2>
+              </div>
+
+              {/* Match rows */}
+              <div className="divide-y divide-white/5">
                 {heatMatches.map(m => {
                   const kickoff = new Date(m.utcDate)
-                  const timeStr = kickoff.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' })
-                  const dateStr = kickoff.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+                  const etTime = kickoff.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', hour12: true })
+
+                  // Build player tag groups: "Name1, Name2 (Team) · Name3 (Team)"
+                  const groups: string[] = []
+                  if (m.homePickerNames.length > 0) groups.push(`${m.homePickerNames.join(', ')} (${m.homeTeam})`)
+                  if (m.awayPickerNames.length > 0) groups.push(`${m.awayPickerNames.join(', ')} (${m.awayTeam})`)
+                  const playerLine = groups.join(' · ')
+
                   return (
-                    <div key={m.id} className="rounded-xl px-4 py-3 flex items-center gap-3"
-                      style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: `1px solid ${m.color}44` }}>
-                      <div className="flex flex-col items-center min-w-[48px]">
-                        <span className="text-lg leading-none">{m.emoji}</span>
-                        <span className="font-bold tabular-nums" style={{ color: m.color, fontFamily: 'Impact, sans-serif', fontSize: '1rem' }}>{m.heatScore}</span>
-                        <span className="text-[9px] text-white/30 uppercase tracking-wide text-center leading-tight">{m.label}</span>
+                    <div key={m.id} className="px-5 py-4">
+                      {/* Top line: emoji + teams + time */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base leading-none">{m.emoji}</span>
+                          <span className="font-bold text-white text-sm">{m.homeTeam} vs {m.awayTeam}</span>
+                        </div>
+                        <span className="text-white/30 text-xs whitespace-nowrap">{etTime} ET</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-white text-sm">{m.homeTeam} vs {m.awayTeam}</p>
-                        <p className="text-white/40 text-xs">{dateStr} · {timeStr} BST</p>
-                        <p className="text-xs mt-0.5" style={{ color: m.color }}>
-                          {m.affected} of {m.totalPlayers} players
-                          {(m.homePickers > 0 || m.awayPickers > 0) && (
-                            <span className="text-white/30"> · {m.homeTeam} {m.homePickers} / {m.awayTeam} {m.awayPickers}</span>
-                          )}
+
+                      {/* Score + label + bar */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="font-bold text-sm tabular-nums" style={{ color: m.color, fontFamily: 'Impact, sans-serif' }}>{m.heatScore}/100</span>
+                        <span className="text-xs text-white/40">—</span>
+                        <span className="text-xs text-white/50">{m.label}</span>
+                        <div className="flex-1 h-1 rounded-full bg-white/10 overflow-hidden">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${m.heatScore}%`, background: m.color }} />
+                        </div>
+                      </div>
+
+                      {/* Affected count */}
+                      <p className="text-xs text-white/40 mb-1.5">
+                        {m.affected} of {m.totalPlayers} players affected
+                      </p>
+
+                      {/* Player tags */}
+                      {playerLine && (
+                        <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                          {playerLine}
                         </p>
-                      </div>
-                      <div className="hidden sm:block w-20 h-1.5 rounded-full bg-white/10 overflow-hidden flex-shrink-0">
-                        <div className="h-full rounded-full" style={{ width: `${m.heatScore}%`, background: m.color }} />
-                      </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
+
+              {/* Verdict */}
+              {heatVerdict && (
+                <div className="px-5 py-4 border-t border-white/5">
+                  <p className="text-xs italic" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                    <span className="text-white/20 not-italic">Verdict: </span>{heatVerdict}
+                  </p>
+                </div>
+              )}
             </div>
           )}
           {finished.length > 0 && (() => {
