@@ -298,12 +298,24 @@ export default function ScoresPage() {
               </div>
             </div>
           )}
-          {finished.length > 0 && (
-            <div>
-              <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-3">Recent Results</h2>
-              <div className="grid gap-3 sm:grid-cols-2">{finished.slice(0, 16).map(m => <MatchCard key={m.id} match={m} />)}</div>
-            </div>
-          )}
+          {finished.length > 0 && (() => {
+            const byDate = new Map<string, typeof finished>()
+            for (const m of [...finished].sort((a, b) => new Date(b.utcDate).getTime() - new Date(a.utcDate).getTime())) {
+              const day = new Date(m.utcDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/London' })
+              if (!byDate.has(day)) byDate.set(day, [])
+              byDate.get(day)!.push(m)
+            }
+            return (
+              <div className="space-y-6">
+                {[...byDate.entries()].map(([day, dayMatches]) => (
+                  <div key={day}>
+                    <h2 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-3">{day}</h2>
+                    <div className="grid gap-3 sm:grid-cols-2">{dayMatches.map(m => <MatchCard key={m.id} match={m} />)}</div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
           {!live.length && !today.length && !finished.length && (
             <div className="text-center text-white/40 py-20">No matches found yet. Tournament starts June 11!</div>
           )}
