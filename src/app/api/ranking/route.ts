@@ -342,6 +342,34 @@ export async function GET() {
         : 0
       const matchPoints = calculatePickPoints(p, matches)
 
+      // Scorer bonus: +10pts per goal by each picked scorer
+      // For wildcard players, use old scorers for pre-wildcard period + new scorers for post
+      const computeScorerBonus = () => {
+        const wcFrom = p.wildcard_effective_from
+        const hasOldScorers = p.wildcard_used && (p.wildcard_old_scorer1 || p.wildcard_old_scorer2 || p.wildcard_old_scorer3)
+
+        if (p.wildcard_used && wcFrom && hasOldScorers) {
+          // Snapshot-based split: fetch goals at the effective-stage boundary from scorer_snapshots
+          // For now use cumulative (snapshot system pending for historical splits)
+          const preScorers = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+          const postScorers = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+          // Cumulative total using max(old, new) per scorer to avoid double-counting
+          const allScorers = new Set([...preScorers.map(norm), ...postScorers.map(norm)])
+          let pts = 0
+          for (const s of allScorers) {
+            const pickName = [...preScorers, ...postScorers].find(n => norm(n) === s) ?? s
+            pts += lookupScorer(pickName, scorerGoals).goals * 10
+          }
+          return pts
+        }
+
+        // No wildcard scorer split — use current scorers
+        return [p.scorer1, p.scorer2, p.scorer3]
+          .filter(Boolean)
+          .reduce((sum, s) => sum + lookupScorer(s!, scorerGoals).goals * 10, 0)
+      }
+      const scorerBonus = tournamentStarted ? computeScorerBonus() : 0
+
       // Wildcard is "pending" until the specific effective-stage deadline is reached.
       // Must compare against wildcard_effective_from, NOT just any future deadline —
       // otherwise a MD2 wildcard stays pending indefinitely because MD3 is also upcoming.
@@ -384,7 +412,8 @@ export async function GET() {
       return {
         ...p,
         host_bonus,
-        total_points: matchPoints + host_bonus,
+        scorer_bonus: scorerBonus,
+        total_points: matchPoints + host_bonus + scorerBonus,
         team_points,
         old_team_points,
         live_teams,
