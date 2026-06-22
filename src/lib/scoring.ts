@@ -55,10 +55,12 @@ export function getNextRound(stage: MatchStage): MatchStage | null {
 
 // Compute which teams have confirmed qualification from the group stage.
 // Returns a map of teamName → date of their last group match (the "earned" date).
-// Top 2 per complete group qualify immediately; best-3rd-place only once all groups finish.
+//
+// Early confirmation: 6pts from 2+ games = mathematically guaranteed top 2 in a
+// 4-team group (at most one other team can also reach 6pts alongside them).
+// This ensures wildcarded players get the bonus at the right scoring split.
 export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date> {
-  // Group matches by group_name, track each team's points/GD/GF and last match date
-  const groups = new Map<string, Map<string, { pts: number; gd: number; gf: number; lastDate: Date }>>()
+  const groups = new Map<string, Map<string, { pts: number; gd: number; gf: number; played: number; lastDate: Date }>>()
 
   for (const m of groupMatches) {
     const g = m.group_name
@@ -71,11 +73,12 @@ export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date>
       [m.home_team, m.home_score, m.away_score],
       [m.away_team, m.away_score, m.home_score],
     ] as [string, number, number][]) {
-      if (!gMap.has(team)) gMap.set(team, { pts: 0, gd: 0, gf: 0, lastDate: new Date(0) })
+      if (!gMap.has(team)) gMap.set(team, { pts: 0, gd: 0, gf: 0, played: 0, lastDate: new Date(0) })
       const s = gMap.get(team)!
-      s.pts += gf > ga ? 3 : gf === ga ? 1 : 0
-      s.gd  += gf - ga
-      s.gf  += gf
+      s.pts    += gf > ga ? 3 : gf === ga ? 1 : 0
+      s.gd     += gf - ga
+      s.gf     += gf
+      s.played += 1
       if (matchDate > s.lastDate) s.lastDate = matchDate
     }
   }
@@ -91,16 +94,26 @@ export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date>
     }).length
 
     const isComplete = matchCount >= 6 // 4-team group = 6 matches
-    if (!isComplete) { allComplete = false; continue }
 
     const standings = [...gMap.entries()]
       .map(([team, s]) => ({ team, ...s }))
       .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
 
-    // Top 2 qualify directly
-    qualifiers.set(standings[0].team, standings[0].lastDate)
-    qualifiers.set(standings[1].team, standings[1].lastDate)
-    thirdPlace.push(standings[2])
+    if (isComplete) {
+      // Full group done — top 2 confirmed, collect 3rd for best-of-12 calculation
+      qualifiers.set(standings[0].team, standings[0].lastDate)
+      qualifiers.set(standings[1].team, standings[1].lastDate)
+      thirdPlace.push(standings[2])
+    } else {
+      allComplete = false
+      // Early confirmation: 6pts from 2+ games guarantees top 2 in a 4-team group
+      // (only one other team can mathematically also reach 6pts alongside them)
+      for (const s of standings) {
+        if (s.pts === 6 && s.played >= 2 && !qualifiers.has(s.team)) {
+          qualifiers.set(s.team, s.lastDate)
+        }
+      }
+    }
   }
 
   // Best 8 third-place teams qualify — only determinable when all 12 groups complete
