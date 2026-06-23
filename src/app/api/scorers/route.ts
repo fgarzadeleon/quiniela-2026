@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { fetchSquadMap, isValidScorer } from '@/lib/squad-validation'
+import { WILDCARD_DEADLINES } from '@/lib/scoring'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,7 @@ export async function GET() {
   const supabase = createServerClient()
   const { data: picks } = await supabase
     .from('picks')
-    .select('name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3')
+    .select('name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_used_at, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3')
     .not('name', 'ilike', 'test%')
     .order('created_at', { ascending: true })
 
@@ -85,21 +86,59 @@ export async function GET() {
     try { squadMap = await fetchSquadMap(FD_KEY) } catch { /* skip validation */ }
   }
 
+  const now = new Date()
+
   const quinielaScorers = (picks ?? [])
-    .filter(p => p.scorer1 || p.scorer2 || p.scorer3)
+    .filter(p => p.scorer1 || p.scorer2 || p.scorer3 || p.wildcard_old_scorer1)
     .map(p => {
+      // Same pending logic as ranking: wildcard is pending until its effective-stage deadline
+      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
+        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+        return effectiveDeadline ? now < effectiveDeadline.deadline : false
+      })())
+
+      // Which scorers are active right now?
+      // Pending: show only old scorers (new ones aren't revealed yet)
+      // Active wildcard: show both old scorers (goals they scored for old teams) + new scorers
+      // No wildcard: show current scorers only
+      const hasOldScorers = p.wildcard_used && (p.wildcard_old_scorer1 || p.wildcard_old_scorer2 || p.wildcard_old_scorer3)
+
+      let activeScorerNames: string[]
+      let oldScorerNames: string[]
+
+      if (isWcPending) {
+        // Hide new scorers — wildcard not yet active
+        activeScorerNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+        oldScorerNames = []
+      } else if (hasOldScorers) {
+        // Wildcard active: new scorers score going forward, old scorers scored before
+        activeScorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+        oldScorerNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3]
+          .filter(Boolean)
+          .filter(s => !activeScorerNames.map(n => norm(n)).includes(norm(s!))) as string[]
+      } else {
+        activeScorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+        oldScorerNames = []
+      }
+
       const teams = [p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean)
-      const scorerPicks = [p.scorer1, p.scorer2, p.scorer3]
-        .filter(Boolean)
-        .map(name => {
-          const valid = squadMap.size === 0 || isValidScorer(name!, teams, squadMap)
-          const { goals, matched } = valid ? lookupScorer(name!, goalsMap) : { goals: 0, matched: false }
-          return { name: name!, goals, matched, valid }
-        })
+
+      const toScorerRow = (name: string, isOld = false) => {
+        const valid = squadMap.size === 0 || isValidScorer(name, teams, squadMap)
+        const { goals, matched } = valid ? lookupScorer(name, goalsMap) : { goals: 0, matched: false }
+        return { name, goals, matched, valid, old: isOld }
+      }
+
+      const scorerPicks = [
+        ...activeScorerNames.map(n => toScorerRow(n, false)),
+        ...oldScorerNames.map(n => toScorerRow(n, true)),
+      ]
+
       return {
         playerName: p.name,
         picks: scorerPicks,
         total: scorerPicks.reduce((s, x) => s + x.goals, 0),
+        wildcardPending: isWcPending,
       }
     })
     .sort((a, b) => b.total - a.total)

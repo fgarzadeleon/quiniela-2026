@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
 
-interface ScorerPick { name: string; goals: number; matched: boolean; valid?: boolean }
-interface QuinielaScorerRow { playerName: string; picks: ScorerPick[]; total: number }
+interface ScorerPick { name: string; goals: number; matched: boolean; valid?: boolean; old?: boolean }
+interface QuinielaScorerRow { playerName: string; picks: ScorerPick[]; total: number; wildcardPending?: boolean }
 interface TopScorer { name: string; team: string; goals: number; assists: number; penalties: number }
 
 const MEDAL = ['🥇', '🥈', '🥉']
@@ -99,6 +99,16 @@ export default function ScorersPage() {
                     <div className="flex flex-wrap gap-1.5">
                       {row.picks.map(p => {
                         const noGoals = !p.matched || p.valid === false
+                        if (p.old) {
+                          // Subbed-out scorer — muted orange style like ranking subOut pills
+                          return (
+                            <span key={p.name} className="text-xs px-2 py-0.5 rounded-full"
+                              style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.25)', color: 'rgba(255,255,255,0.45)', opacity: 0.8 }}>
+                              <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼ </span>
+                              {p.name}{p.goals > 0 && <strong style={{ color: '#4ACA6A' }}> · {p.goals}⚽</strong>}
+                            </span>
+                          )
+                        }
                         return (
                           <span
                             key={p.name}
