@@ -58,21 +58,31 @@ const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
 
 type SubStatus = 'normal' | 'subOut' | 'subIn'
 
-function FormDots({ form }: { form?: Array<'W' | 'D' | 'L'> }) {
-  if (!form || form.length === 0) return null
+function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null } }) {
+  if (!form || form.results.length === 0) return null
   const colors: Record<string, string> = { W: '#4ACA6A', D: 'rgba(255,255,255,0.35)', L: '#D72638' }
   return (
     <span className="flex items-center gap-0.5">
-      {form.map((r, i) => (
-        <span key={i} title={r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
-          style={{ width: 6, height: 6, borderRadius: '50%', background: colors[r], display: 'inline-block', flexShrink: 0 }} />
-      ))}
+      {form.results.map((r, i) => {
+        const isQualified = form.qualifiedAtIndex === i
+        return (
+          <span key={i} title={isQualified ? 'Qualified!' : r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
+            style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: colors[r],
+              display: 'inline-block', flexShrink: 0,
+              outline: isQualified ? '2px solid #F5C518' : 'none',
+              outlineOffset: '1px',
+            }} />
+        )
+      })}
     </span>
   )
 }
 
 function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
-  name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string; form?: Array<'W' | 'D' | 'L'>
+  name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string
+  form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }
 }) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
@@ -150,7 +160,7 @@ export default function RankingPage() {
   const [tab, setTab] = useState<Tab>('ranking')
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
   const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
-  const [teamForm, setTeamForm] = useState<Record<string, Array<'W' | 'D' | 'L'>>>({})
+  const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }>>({})
 
   useEffect(() => {
     fetch('/api/team-form').then(r => r.json()).then(d => setTeamForm(d.form ?? {})).catch(() => {})
@@ -269,6 +279,22 @@ export default function RankingPage() {
           {!loading && !error && picks.length === 0 && (
             <div className="text-center text-white/40 py-20">
               No picks yet. <a href="/picks" className="text-[#F5C518] hover:underline">Be the first!</a>
+            </div>
+          )}
+
+          {picks.length > 0 && tournamentStarted && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-4 px-1">
+              <span className="text-white/25 text-[10px] uppercase tracking-widest font-bold">Form guide</span>
+              {([['W', '#4ACA6A', 'Win'], ['D', 'rgba(255,255,255,0.35)', 'Draw'], ['L', '#D72638', 'Loss']] as const).map(([r, color, label]) => (
+                <span key={r} className="flex items-center gap-1.5 text-[11px] text-white/40">
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+                  {label}
+                </span>
+              ))}
+              <span className="flex items-center gap-1.5 text-[11px] text-white/40">
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ACA6A', display: 'inline-block', flexShrink: 0, outline: '2px solid #F5C518', outlineOffset: '1px' }} />
+                Qualified
+              </span>
             </div>
           )}
 

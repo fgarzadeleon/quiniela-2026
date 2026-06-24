@@ -31,8 +31,8 @@ export async function GET() {
     const { matches = [] } = await res.json()
     const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
 
-    // team → ordered array of { result: 'W'|'D'|'L', matchday: number, utcDate: string }
-    const form = new Map<string, Array<{ result: 'W' | 'D' | 'L'; matchday: number }>>()
+    type MatchEntry = { result: 'W' | 'D' | 'L'; matchday: number; pts: number }
+    const formEntries = new Map<string, MatchEntry[]>()
 
     for (const m of matches as Record<string, unknown>[]) {
       const status = m.status as string
@@ -47,27 +47,43 @@ export async function GET() {
       const awayTeam = m.awayTeam as Record<string, string>
       const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
       const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
-      const matchday = m.matchday as number ?? 0
+      const matchday = (m.matchday as number) ?? 0
+      const stage = m.stage as string
 
-      if (!form.has(home)) form.set(home, [])
-      if (!form.has(away)) form.set(away, [])
+      // Only track group stage for qualification badge
+      if (stage !== 'GROUP_STAGE') continue
 
-      if (hg > ag) {
-        form.get(home)!.push({ result: 'W', matchday })
-        form.get(away)!.push({ result: 'L', matchday })
-      } else if (hg === ag) {
-        form.get(home)!.push({ result: 'D', matchday })
-        form.get(away)!.push({ result: 'D', matchday })
-      } else {
-        form.get(home)!.push({ result: 'L', matchday })
-        form.get(away)!.push({ result: 'W', matchday })
-      }
+      if (!formEntries.has(home)) formEntries.set(home, [])
+      if (!formEntries.has(away)) formEntries.set(away, [])
+
+      const homeResult: 'W' | 'D' | 'L' = hg > ag ? 'W' : hg === ag ? 'D' : 'L'
+      const awayResult: 'W' | 'D' | 'L' = hg < ag ? 'W' : hg === ag ? 'D' : 'L'
+      const homePts = homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0
+      const awayPts = awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0
+
+      formEntries.get(home)!.push({ result: homeResult, matchday, pts: homePts })
+      formEntries.get(away)!.push({ result: awayResult, matchday, pts: awayPts })
     }
 
-    // Sort each team's form by matchday
-    const result: Record<string, Array<'W' | 'D' | 'L'>> = {}
-    for (const [team, entries] of form) {
-      result[team] = entries.sort((a, b) => a.matchday - b.matchday).map(e => e.result)
+    // For each team, determine which matchday index earned the qualification bonus.
+    // 6pts from 2+ games = mathematically confirmed top-2 (same rule as scoring.ts).
+    // Mark the index of the match that pushed them to 6pts.
+    const result: Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }> = {}
+
+    for (const [team, entries] of formEntries) {
+      const sorted = entries.sort((a, b) => a.matchday - b.matchday)
+      const results = sorted.map(e => e.result)
+
+      let cumPts = 0
+      let qualifiedAtIndex: number | null = null
+      for (let i = 0; i < sorted.length; i++) {
+        cumPts += sorted[i].pts
+        if (cumPts >= 6 && qualifiedAtIndex === null) {
+          qualifiedAtIndex = i
+        }
+      }
+
+      result[team] = { results, qualifiedAtIndex }
     }
 
     return NextResponse.json({ form: result }, {
