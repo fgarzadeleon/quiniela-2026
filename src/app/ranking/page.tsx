@@ -212,10 +212,10 @@ export default function RankingPage() {
       <div className="mb-6 rounded-xl px-4 py-3" style={{ background: 'linear-gradient(145deg, #1A1400, #2A1F00)', border: '1px solid rgba(245,197,24,0.25)' }}>
         <div className="flex items-center justify-between mb-2">
           <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.12em', color: '#F5C518' }}>💰 PRIZE POOL — 29 PLAYERS</span>
-          <span className="text-white/30 text-xs">14,500 MXN · £625</span>
+          <span className="text-white/30 text-xs">14,500 MXN · £609</span>
         </div>
         <div className="grid grid-cols-5 gap-1.5 text-center">
-          {([['🥇 1st', '6,000', '£259'], ['🥈 2nd', '3,000', '£129'], ['🥉 3rd', '2,000', '£86'], ['4th', '1,000', '£43'], ['⚽ Scorers', '2,500', '£108']] as const).map(([label, mxn, gbp]) => (
+          {([['🥇 1st', '6,000', '£252'], ['🥈 2nd', '3,000', '£126'], ['🥉 3rd', '2,000', '£84'], ['4th', '1,000', '£42'], ['⚽ Scorers', '2,500', '£105']] as const).map(([label, mxn, gbp]) => (
             <div key={label} className="rounded-lg py-2 px-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
               <div className="text-[10px] text-white/40 mb-0.5">{label}</div>
               <div className="font-bold text-white text-xs">${mxn}</div>
