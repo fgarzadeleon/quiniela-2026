@@ -68,11 +68,11 @@ function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifie
         return (
           <span key={i} title={isQualified ? 'Qualified!' : r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
             style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: colors[r],
+              width: 7, height: 7, borderRadius: '50%',
+              background: isQualified
+                ? `radial-gradient(circle, ${colors[r]} 55%, #F5C518 55%)`
+                : colors[r],
               display: 'inline-block', flexShrink: 0,
-              outline: isQualified ? '2px solid #F5C518' : 'none',
-              outlineOffset: '1px',
             }} />
         )
       })}
@@ -292,7 +292,7 @@ export default function RankingPage() {
                 </span>
               ))}
               <span className="flex items-center gap-1.5 text-[11px] text-white/40">
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#4ACA6A', display: 'inline-block', flexShrink: 0, outline: '2px solid #F5C518', outlineOffset: '1px' }} />
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'radial-gradient(circle, #4ACA6A 55%, #F5C518 55%)', display: 'inline-block', flexShrink: 0 }} />
                 Qualified
               </span>
             </div>
