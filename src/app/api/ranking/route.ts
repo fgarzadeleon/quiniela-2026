@@ -158,8 +158,11 @@ async function fetchMatches(now: number): Promise<{ matches: Match[]; liveTeams:
         }
         if (!SCOREABLE_STATUSES.has(fdStatus)) continue
         const score = m.score as Record<string, Record<string, number | null>>
-        const homeScore = score?.fullTime?.home
-        const awayScore = score?.fullTime?.away
+        // In knockout rounds, use extraTime score if available (ET winner scores as WIN/LOSS).
+        // Penalties don't change the score — both teams get DRAW, advance bonus comes from
+        // appearing in the next stage.
+        const homeScore = score?.extraTime?.home ?? score?.fullTime?.home
+        const awayScore = score?.extraTime?.away ?? score?.fullTime?.away
         const stage = STAGE_MAP[m.stage as string]
         if (homeScore == null || awayScore == null || !stage) continue
         const isLive = LIVE_STATUSES.has(fdStatus)
