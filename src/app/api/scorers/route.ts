@@ -20,6 +20,12 @@ const FD_TO_OURS: Record<string, string> = {
   'Türkiye':            'Turkey',
 }
 
+const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
+  GROUP_STAGE_MD2: 'MD2', GROUP_STAGE_MD3: 'MD3',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
+  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'Final',
+}
+
 function norm(s: string) {
   return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
@@ -118,13 +124,15 @@ export async function GET() {
       const hasOldScorers = p.wildcard_used && (p.wildcard_old_scorer1 || p.wildcard_old_scorer2 || p.wildcard_old_scorer3)
       const teams = [p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean)
 
+      const wcLabel = effectiveStage ? (EFFECTIVE_STAGE_LABEL[effectiveStage] ?? '') : ''
+
       const toScorerRow = (name: string, goals: number, isOld = false) => {
         const valid = squadMap.size === 0 || isValidScorer(name, teams, squadMap)
         const matched = lookupGoals(name, currentGoals).matched
-        return { name, goals, matched, valid, old: isOld }
+        return { name, goals, matched, valid, old: isOld, wcLabel: isOld ? wcLabel : undefined }
       }
 
-      let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean }>
+      let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean; wcLabel?: string }>
 
       if (isWcPending) {
         // Hide new scorers — show old lineup only with current goals
@@ -164,6 +172,7 @@ export async function GET() {
         picks: scorerPicks,
         total: scorerPicks.reduce((s, x) => s + x.goals, 0),
         wildcardPending: isWcPending,
+        wcLabel,
       }
     })
     .sort((a, b) => b.total - a.total)
