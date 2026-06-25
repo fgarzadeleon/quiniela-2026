@@ -14,17 +14,27 @@ function norm(s: string) {
   return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-// Fuzzy match: exact normalized, last-name match, or FD name contains pick name
+// Fuzzy match: exact normalized, last-name match, or FD name contains pick name.
+// Always returns the highest-goal match to handle single-name picks like "Salah"
+// that might also exist as a short entry with 0 goals in the map.
 function lookupScorer(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
   const pn = norm(pickName)
-  if (goalsMap.has(pn)) return { goals: goalsMap.get(pn)!, matched: true }
   const pLast = pn.split(/\s+/).at(-1) ?? ''
+  let bestMatch: { goals: number; matched: boolean } | null = null
+
+  if (goalsMap.has(pn)) bestMatch = { goals: goalsMap.get(pn)!, matched: true }
+
   for (const [fdNorm, goals] of goalsMap) {
     const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
-    if (pLast.length > 3 && pLast === fdLast) return { goals, matched: true }
-    if (pn.length > 4 && fdNorm.includes(pn)) return { goals, matched: true }
+    const matches =
+      (pLast.length > 3 && pLast === fdLast) ||
+      (pn.length > 4 && fdNorm.includes(pn))
+    if (matches && (!bestMatch || goals > bestMatch.goals)) {
+      bestMatch = { goals, matched: true }
+    }
   }
-  return { goals: 0, matched: false }
+
+  return bestMatch ?? { goals: 0, matched: false }
 }
 
 async function fetchScorerGoals(): Promise<Map<string, number>> {

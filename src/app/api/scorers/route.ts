@@ -32,14 +32,24 @@ function norm(s: string) {
 
 function lookupGoals(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
   const pn = norm(pickName)
-  if (goalsMap.has(pn)) return { goals: goalsMap.get(pn)!, matched: true }
   const pLast = pn.split(/\s+/).at(-1) ?? ''
+  let bestMatch: { goals: number; matched: boolean } | null = null
+
+  // Direct match first
+  if (goalsMap.has(pn)) bestMatch = { goals: goalsMap.get(pn)!, matched: true }
+
+  // Fuzzy: last-name or substring — keep highest goal count found
   for (const [fdNorm, goals] of goalsMap) {
     const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
-    if (pLast.length > 3 && pLast === fdLast) return { goals, matched: true }
-    if (pn.length > 4 && fdNorm.includes(pn)) return { goals, matched: true }
+    const matches =
+      (pLast.length > 3 && pLast === fdLast) ||
+      (pn.length > 4 && fdNorm.includes(pn))
+    if (matches && (!bestMatch || goals > bestMatch.goals)) {
+      bestMatch = { goals, matched: true }
+    }
   }
-  return { goals: 0, matched: false }
+
+  return bestMatch ?? { goals: 0, matched: false }
 }
 
 // Build goals map from a scorer_snapshot row array
