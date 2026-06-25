@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { TEAM_MAP } from '@/lib/teams'
 import Flag from '@/components/Flag'
 
-interface ScorerPick { name: string; goals: number; matched: boolean; valid?: boolean; old?: boolean; wcLabel?: string }
+interface ScorerPick { name: string; goals: number; matched: boolean; valid?: boolean; old?: boolean; subIn?: boolean; wcLabel?: string }
 interface QuinielaScorerRow { playerName: string; picks: ScorerPick[]; total: number; wildcardPending?: boolean; wcLabel?: string }
 interface TopScorer { name: string; team: string; goals: number; assists: number; penalties: number }
 
@@ -107,6 +107,19 @@ export default function ScorersPage() {
                                 ▼{p.wcLabel && <span style={{ fontSize: '0.55rem', marginLeft: 1 }}>{p.wcLabel}</span>}
                               </span>
                               {p.name}{p.goals > 0 && <strong style={{ color: '#4ACA6A' }}> · {p.goals}⚽</strong>}
+                            </span>
+                          )
+                        }
+                        if (p.subIn) {
+                          return (
+                            <span key={p.name} className="text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                              style={{ background: 'rgba(74,202,106,0.1)', border: '1px solid rgba(74,202,106,0.3)', color: '#4ACA6A' }}>
+                              <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>
+                                ▲{p.wcLabel && <span style={{ fontSize: '0.55rem', marginLeft: 1 }}>{p.wcLabel}</span>}
+                              </span>
+                              <span style={{ color: '#4ACA6A' }}>{p.name}</span>
+                              {p.goals > 0 && <strong> · {p.goals}⚽</strong>}
+                              {!p.matched && <span className="opacity-60"> · ?</span>}
                             </span>
                           )
                         }

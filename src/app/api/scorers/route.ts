@@ -129,10 +129,10 @@ export async function GET() {
       const toScorerRow = (name: string, goals: number, isOld = false) => {
         const valid = squadMap.size === 0 || isValidScorer(name, teams, squadMap)
         const matched = lookupGoals(name, currentGoals).matched
-        return { name, goals, matched, valid, old: isOld, wcLabel: isOld ? wcLabel : undefined }
+        return { name, goals, matched, valid, old: isOld, subIn: false, wcLabel: wcLabel || undefined }
       }
 
-      let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean; wcLabel?: string }>
+      let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean; subIn: boolean; wcLabel?: string }>
 
       if (isWcPending) {
         // Hide new scorers — show old lineup only with current goals
@@ -153,11 +153,15 @@ export async function GET() {
           })
 
         // New scorers: goals scored FROM the split onwards (current - snapshot)
+        const oldNamesNorm = new Set(oldNames.map(norm))
         const newPills = newNames.map(name => {
           const total = lookupGoals(name, currentGoals).goals
           const before = goalsBeforeStage(name, effectiveStage)
           const goals = Math.max(0, total - before)
-          return toScorerRow(name, goals, false)
+          const row = toScorerRow(name, goals, false)
+          // Mark as subIn if this scorer wasn't in the old lineup
+          if (!oldNamesNorm.has(norm(name))) row.subIn = true
+          return row
         })
 
         scorerPicks = [...newPills, ...oldPills]
