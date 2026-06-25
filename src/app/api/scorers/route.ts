@@ -9,7 +9,6 @@ const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
 
-// football-data.org team name → our name
 const FD_TO_OURS: Record<string, string> = {
   'United States':      'USA',
   'Korea Republic':     'South Korea',
@@ -25,7 +24,7 @@ function norm(s: string) {
   return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-function lookupScorer(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
+function lookupGoals(pickName: string, goalsMap: Map<string, number>): { goals: number; matched: boolean } {
   const pn = norm(pickName)
   if (goalsMap.has(pn)) return { goals: goalsMap.get(pn)!, matched: true }
   const pLast = pn.split(/\s+/).at(-1) ?? ''
@@ -37,102 +36,128 @@ function lookupScorer(pickName: string, goalsMap: Map<string, number>): { goals:
   return { goals: 0, matched: false }
 }
 
+// Build goals map from a scorer_snapshot row array
+function buildGoalsMap(rows: Array<{ scorer_name: string; goals: number }>): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const row of rows) map.set(norm(row.scorer_name), row.goals)
+  return map
+}
+
 export async function GET() {
   const tournamentStarted = new Date() >= DEADLINE
 
-  let topScorers: Array<{ name: string; team: string; goals: number; assists: number; penalties: number }> = []
-
-  if (FD_KEY) {
-    try {
-      const res = await fetch(`${FD_BASE}/competitions/WC/scorers?limit=200`, {
-        headers: { 'X-Auth-Token': FD_KEY },
-        next: { revalidate: 60 },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        topScorers = (data.scorers ?? []).map((s: {
-          player?: { name?: string }
-          team?: { name?: string }
-          goals?: number
-          assists?: number
-          penalties?: number
-        }) => ({
-          name: s.player?.name ?? '',
-          team: FD_TO_OURS[s.team?.name ?? ''] ?? s.team?.name ?? '',
-          goals: s.goals ?? 0,
-          assists: s.assists ?? 0,
-          penalties: s.penalties ?? 0,
-        }))
-      }
-    } catch { /* fall through with empty list */ }
-  }
-
-  // Build goals lookup keyed by normalised name
-  const goalsMap = new Map<string, number>()
-  for (const s of topScorers) {
-    goalsMap.set(norm(s.name), s.goals)
-  }
-
   const supabase = createServerClient()
-  const { data: picks } = await supabase
-    .from('picks')
-    .select('name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_used_at, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3')
-    .not('name', 'ilike', 'test%')
-    .order('created_at', { ascending: true })
 
-  // Fetch squad data so we can flag scorers not in the player's teams
-  let squadMap = new Map<string, string[]>()
-  if (FD_KEY) {
-    try { squadMap = await fetchSquadMap(FD_KEY) } catch { /* skip validation */ }
+  // Fetch everything in parallel
+  const [topScorersRes, picksRes, snapshotsRes, squadMapRes] = await Promise.all([
+    FD_KEY
+      ? fetch(`${FD_BASE}/competitions/WC/scorers?limit=200`, {
+          headers: { 'X-Auth-Token': FD_KEY },
+          next: { revalidate: 60 },
+        }).then(r => r.ok ? r.json() : { scorers: [] }).catch(() => ({ scorers: [] }))
+      : Promise.resolve({ scorers: [] }),
+    supabase
+      .from('picks')
+      .select('name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_used_at, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3')
+      .not('name', 'ilike', 'test%')
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('scorer_snapshots')
+      .select('scorer_name, goals, effective_stage'),
+    FD_KEY
+      ? fetchSquadMap(FD_KEY).catch(() => new Map<string, string[]>())
+      : Promise.resolve(new Map<string, string[]>()),
+  ])
+
+  // Build top scorers list
+  const topScorers = ((topScorersRes.scorers ?? []) as Array<{
+    player?: { name?: string }; team?: { name?: string }; goals?: number; assists?: number; penalties?: number
+  }>).map(s => ({
+    name: s.player?.name ?? '',
+    team: FD_TO_OURS[s.team?.name ?? ''] ?? s.team?.name ?? '',
+    goals: s.goals ?? 0,
+    assists: s.assists ?? 0,
+    penalties: s.penalties ?? 0,
+  }))
+
+  // Current cumulative goals map (live total from FD)
+  const currentGoals = new Map<string, number>()
+  for (const s of topScorers) currentGoals.set(norm(s.name), s.goals)
+
+  // Snapshot goals maps by stage
+  const snapshots = snapshotsRes.data ?? []
+  const snapshotsByStage = new Map<string, Map<string, number>>()
+  for (const stage of ['GROUP_STAGE_MD2', 'GROUP_STAGE_MD3', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']) {
+    const rows = snapshots.filter(s => s.effective_stage === stage)
+    if (rows.length > 0) snapshotsByStage.set(stage, buildGoalsMap(rows))
   }
 
+  const squadMap = squadMapRes as Map<string, string[]>
+  const picks = picksRes.data ?? []
   const now = new Date()
 
-  const quinielaScorers = (picks ?? [])
+  // Get the snapshot map for the stage just before a given effective stage.
+  // Goals scored BEFORE effectiveStage = snapshot at that boundary.
+  // Goals scored FROM effectiveStage = current - snapshot at that boundary.
+  function goalsBeforeStage(scorerName: string, stage: string): number {
+    const snap = snapshotsByStage.get(stage)
+    if (!snap) return 0
+    return lookupGoals(scorerName, snap).goals
+  }
+
+  const quinielaScorers = picks
     .filter(p => p.scorer1 || p.scorer2 || p.scorer3 || p.wildcard_old_scorer1)
     .map(p => {
-      // Same pending logic as ranking: wildcard is pending until its effective-stage deadline
+      // Same pending logic as ranking
       const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
-        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
-        return effectiveDeadline ? now < effectiveDeadline.deadline : false
+        const d = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+        return d ? now < d.deadline : false
       })())
 
-      // Which scorers are active right now?
-      // Pending: show only old scorers (new ones aren't revealed yet)
-      // Active wildcard: show both old scorers (goals they scored for old teams) + new scorers
-      // No wildcard: show current scorers only
+      const effectiveStage = p.wildcard_effective_from as string | null
       const hasOldScorers = p.wildcard_used && (p.wildcard_old_scorer1 || p.wildcard_old_scorer2 || p.wildcard_old_scorer3)
-
-      let activeScorerNames: string[]
-      let oldScorerNames: string[]
-
-      if (isWcPending) {
-        // Hide new scorers — wildcard not yet active
-        activeScorerNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
-        oldScorerNames = []
-      } else if (hasOldScorers) {
-        // Wildcard active: new scorers score going forward, old scorers scored before
-        activeScorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
-        oldScorerNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3]
-          .filter(Boolean)
-          .filter(s => !activeScorerNames.map(n => norm(n)).includes(norm(s!))) as string[]
-      } else {
-        activeScorerNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
-        oldScorerNames = []
-      }
-
       const teams = [p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean)
 
-      const toScorerRow = (name: string, isOld = false) => {
+      const toScorerRow = (name: string, goals: number, isOld = false) => {
         const valid = squadMap.size === 0 || isValidScorer(name, teams, squadMap)
-        const { goals, matched } = valid ? lookupScorer(name, goalsMap) : { goals: 0, matched: false }
+        const matched = lookupGoals(name, currentGoals).matched
         return { name, goals, matched, valid, old: isOld }
       }
 
-      const scorerPicks = [
-        ...activeScorerNames.map(n => toScorerRow(n, false)),
-        ...oldScorerNames.map(n => toScorerRow(n, true)),
-      ]
+      let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean }>
+
+      if (isWcPending) {
+        // Hide new scorers — show old lineup only with current goals
+        const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+        scorerPicks = oldNames.map(name => toScorerRow(name, lookupGoals(name, currentGoals).goals, false))
+      } else if (hasOldScorers && effectiveStage) {
+        // Wildcard active — split goals at the effective stage boundary
+        const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+        const newNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+        const newNamesNorm = new Set(newNames.map(norm))
+
+        // Old scorers: goals scored BEFORE the split (from snapshot)
+        const oldPills = oldNames
+          .filter(name => !newNamesNorm.has(norm(name))) // exclude kept scorers (handled as new)
+          .map(name => {
+            const goals = goalsBeforeStage(name, effectiveStage)
+            return toScorerRow(name, goals, true)
+          })
+
+        // New scorers: goals scored FROM the split onwards (current - snapshot)
+        const newPills = newNames.map(name => {
+          const total = lookupGoals(name, currentGoals).goals
+          const before = goalsBeforeStage(name, effectiveStage)
+          const goals = Math.max(0, total - before)
+          return toScorerRow(name, goals, false)
+        })
+
+        scorerPicks = [...newPills, ...oldPills]
+      } else {
+        // No wildcard — use current cumulative goals
+        const names = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+        scorerPicks = names.map(name => toScorerRow(name, lookupGoals(name, currentGoals).goals, false))
+      }
 
       return {
         playerName: p.name,
