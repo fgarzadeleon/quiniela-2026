@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES } from '@/lib/scoring'
+import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES, computeGroupQualifiers } from '@/lib/scoring'
 import { getTeam, SCORING, STAGE_ORDER } from '@/lib/teams'
 import { Match, Pick } from '@/types'
 
@@ -211,6 +211,9 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
   const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
   const scoreable = matches.filter(m => m.status === 'FINISHED' || LIVE.has(m.status))
 
+  // Group stage qualifiers (same logic as scoring.ts)
+  const groupQualifiers = computeGroupQualifiers(scoreable.filter(m => m.stage === 'GROUP_STAGE'))
+
   // Count how many players picked each team (including wildcard old teams)
   const picksCount = new Map<string, number>()
   for (const p of picks) {
@@ -225,14 +228,17 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
     const scoring = SCORING[team.tier as 'A' | 'B' | 'C' | 'D']
     let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0
 
+    // Group stage qualification bonus
+    if (groupQualifiers.has(teamName)) pts += scoring.advanceRound
+
     for (const stage of STAGE_ORDER) {
       const stageMatches = scoreable.filter(
         m => m.stage === stage && (m.home_team === teamName || m.away_team === teamName)
       )
       if (stageMatches.length === 0) continue
 
-      // Team played in this stage → they advanced to it (add bonus for non-group stages)
-      if (stage !== 'GROUP_STAGE') pts += scoring.advanceRound
+      // R16 and beyond: advance bonus for making it to this stage (same as scoring.ts)
+      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') pts += scoring.advanceRound
 
       for (const m of stageMatches) {
         const isHome = m.home_team === teamName
