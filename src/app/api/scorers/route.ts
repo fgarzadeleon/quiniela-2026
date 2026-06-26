@@ -166,11 +166,11 @@ export async function GET() {
         const oldNamesNorm = new Set(oldNames.map(norm))
         const newPills = newNames.map(name => {
           const total = lookupGoals(name, currentGoals).goals
-          const before = goalsBeforeStage(name, effectiveStage)
+          const isKept = oldNamesNorm.has(norm(name))
+          const before = isKept ? 0 : goalsBeforeStage(name, effectiveStage)
           const goals = Math.max(0, total - before)
           const row = toScorerRow(name, goals, false)
-          // Mark as subIn if this scorer wasn't in the old lineup
-          if (!oldNamesNorm.has(norm(name))) row.subIn = true
+          if (!isKept) row.subIn = true
           return row
         })
 
