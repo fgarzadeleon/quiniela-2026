@@ -146,7 +146,9 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
   )
 }
 
-type Tab = 'ranking' | 'teams' | 'fun_stats'
+type Tab = 'ranking' | 'teams' | 'fun_stats' | 'breakdown'
+
+interface BreakdownPlayer { name: string; total: number; earned: number[] }
 
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
@@ -161,9 +163,11 @@ export default function RankingPage() {
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
   const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
   const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }>>({})
+  const [breakdown, setBreakdown] = useState<{ periods: string[]; players: BreakdownPlayer[] } | null>(null)
 
   useEffect(() => {
     fetch('/api/team-form').then(r => r.json()).then(d => setTeamForm(d.form ?? {})).catch(() => {})
+    fetch('/api/ranking/breakdown').then(r => r.json()).then(d => setBreakdown(d)).catch(() => {})
 
     fetch('/api/ranking/history')
       .then(r => r.json())
@@ -227,7 +231,7 @@ export default function RankingPage() {
 
       {funStats.length > 0 && (
         <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {([['ranking', '🏆 Ranking'], ['teams', '🌍 By Country'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
+          {([['ranking', '🏆 Ranking'], ['teams', '🌍 By Country'], ['breakdown', '📅 By Matchday'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -473,6 +477,73 @@ export default function RankingPage() {
           </div>
         </div>
       )}
+
+      {tab === 'breakdown' && breakdown && breakdown.players.length > 0 && (() => {
+        const { periods, players } = breakdown
+        // Max absolute value per period for color scaling
+        const maxPerPeriod = periods.map((_, pi) =>
+          Math.max(...players.map(p => Math.abs(p.earned[pi] ?? 0)), 1)
+        )
+        return (
+          <div>
+            <p className="text-white/40 text-xs mb-4">Points earned by each player per matchday. Gaps show distance to the next player.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th className="text-left py-2 pr-4 text-white/30 font-normal sticky left-0" style={{ background: '#0a0f1e', minWidth: 120 }}>Player</th>
+                    {periods.map(p => (
+                      <th key={p} className="text-center py-2 px-3 text-white/30 font-bold uppercase tracking-wider" style={{ minWidth: 56 }}>{p}</th>
+                    ))}
+                    <th className="text-center py-2 px-3 text-white/50 font-bold uppercase tracking-wider" style={{ minWidth: 72 }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map((player, i) => {
+                    const gap = i < players.length - 1 ? player.total - players[i + 1].total : null
+                    return (
+                      <>
+                        <tr key={player.name}
+                          style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                          <td className="py-2 pr-4 font-bold text-white/80 sticky left-0" style={{ background: i % 2 === 0 ? '#0d1525' : '#0a0f1e' }}>
+                            <span className="text-white/30 mr-1.5">#{i + 1}</span>{player.name}
+                          </td>
+                          {player.earned.map((pts, pi) => {
+                            const intensity = Math.min(1, Math.abs(pts) / maxPerPeriod[pi])
+                            const bg = pts > 0
+                              ? `rgba(74,202,106,${intensity * 0.45})`
+                              : pts < 0
+                              ? `rgba(215,38,56,${intensity * 0.45})`
+                              : 'transparent'
+                            const color = pts > 0 ? '#4ACA6A' : pts < 0 ? '#D72638' : 'rgba(255,255,255,0.2)'
+                            return (
+                              <td key={pi} className="text-center py-2 px-3 tabular-nums font-bold rounded"
+                                style={{ background: bg, color }}>
+                                {pts > 0 ? '+' : ''}{pts !== 0 ? pts : '—'}
+                              </td>
+                            )
+                          })}
+                          <td className="text-center py-2 px-3 font-bold tabular-nums"
+                            style={{ color: '#F5C518', fontFamily: 'Impact, sans-serif', fontSize: '0.85rem' }}>
+                            {player.total.toLocaleString()}
+                          </td>
+                        </tr>
+                        {gap !== null && gap > 0 && (
+                          <tr key={`gap-${i}`}>
+                            <td colSpan={periods.length + 2} className="text-center py-0.5">
+                              <span className="text-[10px] text-white/20">▼ {gap} pts gap ▼</span>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
 
       {tab === 'fun_stats' && funStats.length > 0 && (
         <div>
