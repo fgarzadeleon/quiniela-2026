@@ -116,12 +116,22 @@ export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date>
     }
   }
 
-  // Best 8 third-place teams qualify — only determinable when all 12 groups complete
-  if (allComplete && thirdPlace.length === 12) {
-    thirdPlace
-      .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
-      .slice(0, 8)
-      .forEach(t => qualifiers.set(t.team, t.lastDate))
+  // Best 8 third-place teams qualify.
+  // Full determination requires all 12 groups complete.
+  // Early guarantee: a team ranked N among complete-group 3rd-place teams is
+  // mathematically confirmed if N ≤ (8 - remaining_groups_count), because
+  // at most that many new 3rd-place teams can join above them.
+  const remainingGroups = 12 - thirdPlace.length
+  const guaranteedSpots = Math.max(0, 8 - remainingGroups)
+
+  const sortedThird = [...thirdPlace].sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
+
+  if (allComplete) {
+    // All groups done — award all 8
+    sortedThird.slice(0, 8).forEach(t => qualifiers.set(t.team, t.lastDate))
+  } else if (guaranteedSpots > 0) {
+    // Partial — award only mathematically confirmed spots
+    sortedThird.slice(0, guaranteedSpots).forEach(t => qualifiers.set(t.team, t.lastDate))
   }
 
   return qualifiers
