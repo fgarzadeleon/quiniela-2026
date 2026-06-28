@@ -478,6 +478,18 @@ export default function RankingPage() {
         </div>
       )}
 
+      {tab === 'breakdown' && (
+        <>
+          {history && (
+            <div className="mb-8">
+              <h2 className="text-white/60 text-sm font-bold uppercase tracking-widest mb-1">📈 Position over time</h2>
+              <p className="text-white/30 text-xs mb-4">Rank at end of each matchday — hover a line to highlight</p>
+              <BumpsChart stages={history.stages} current={history.current} />
+            </div>
+          )}
+        </>
+      )}
+
       {tab === 'breakdown' && breakdown && breakdown.players.length > 0 && (() => {
         const { periods, players } = breakdown
         // Max absolute value per period for color scaling
@@ -568,19 +580,6 @@ export default function RankingPage() {
             ))}
           </div>
 
-          {history && (
-            <div className="mb-10">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>
-                  📈 RANKING MOVEMENT
-                </span>
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-              </div>
-              <p className="text-white/40 text-xs mb-4">Position at the end of each matchday — hover a line to highlight</p>
-              <BumpsChart stages={history.stages} current={history.current} />
-            </div>
-          )}
 
           {hostStats && (
             <div>
