@@ -150,6 +150,99 @@ type Tab = 'ranking' | 'teams' | 'fun_stats' | 'breakdown'
 
 interface BreakdownPlayer { name: string; total: number; earned: number[] }
 
+function BreakdownTable({ periods, players }: { periods: string[]; players: BreakdownPlayer[] }) {
+  const [sortCol, setSortCol] = useState<number | 'total'>('total')
+  const [sortDir, setSortDir] = useState<1 | -1>(-1) // -1 = desc
+
+  function handleSort(col: number | 'total') {
+    if (sortCol === col) setSortDir(d => d === -1 ? 1 : -1)
+    else { setSortCol(col); setSortDir(-1) }
+  }
+
+  const sorted = [...players].sort((a, b) => {
+    const av = sortCol === 'total' ? a.total : (a.earned[sortCol as number] ?? 0)
+    const bv = sortCol === 'total' ? b.total : (b.earned[sortCol as number] ?? 0)
+    return (bv - av) * sortDir
+  })
+
+  const maxPerPeriod = periods.map((_, pi) =>
+    Math.max(...players.map(p => Math.abs(p.earned[pi] ?? 0)), 1)
+  )
+
+  const arrow = (col: number | 'total') => {
+    if (sortCol !== col) return <span className="text-white/20 ml-0.5">↕</span>
+    return <span className="ml-0.5" style={{ color: '#F5C518' }}>{sortDir === -1 ? '↓' : '↑'}</span>
+  }
+
+  return (
+    <div>
+      <p className="text-white/40 text-xs mb-4">Click a column to sort. Gaps show distance to next player.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr>
+              <th className="text-left py-2 pr-4 text-white/30 font-normal sticky left-0" style={{ background: '#0a0f1e', minWidth: 120 }}>Player</th>
+              {periods.map((p, pi) => (
+                <th key={p} onClick={() => handleSort(pi)}
+                  className="text-center py-2 px-3 font-bold uppercase tracking-wider cursor-pointer select-none"
+                  style={{ minWidth: 56, color: sortCol === pi ? '#F5C518' : 'rgba(255,255,255,0.3)' }}>
+                  {p}{arrow(pi)}
+                </th>
+              ))}
+              <th onClick={() => handleSort('total')}
+                className="text-center py-2 px-3 font-bold uppercase tracking-wider cursor-pointer select-none"
+                style={{ minWidth: 72, color: sortCol === 'total' ? '#F5C518' : 'rgba(255,255,255,0.5)' }}>
+                Total{arrow('total')}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((player, i) => {
+              const gap = i < sorted.length - 1
+                ? (sortCol === 'total'
+                    ? player.total - sorted[i + 1].total
+                    : (player.earned[sortCol as number] ?? 0) - (sorted[i + 1].earned[sortCol as number] ?? 0))
+                : null
+              return (
+                <>
+                  <tr key={player.name} style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                    <td className="py-2 pr-4 font-bold text-white/80 sticky left-0" style={{ background: i % 2 === 0 ? '#0d1525' : '#0a0f1e' }}>
+                      <span className="text-white/30 mr-1.5">#{i + 1}</span>{player.name}
+                    </td>
+                    {player.earned.map((pts, pi) => {
+                      const intensity = Math.min(1, Math.abs(pts) / maxPerPeriod[pi])
+                      const bg = pts > 0 ? `rgba(74,202,106,${intensity * 0.45})` : pts < 0 ? `rgba(215,38,56,${intensity * 0.45})` : 'transparent'
+                      const color = pts > 0 ? '#4ACA6A' : pts < 0 ? '#D72638' : 'rgba(255,255,255,0.2)'
+                      const isSort = sortCol === pi
+                      return (
+                        <td key={pi} className="text-center py-2 px-3 tabular-nums font-bold rounded"
+                          style={{ background: bg, color, outline: isSort ? '1px solid rgba(245,197,24,0.3)' : 'none' }}>
+                          {pts > 0 ? '+' : ''}{pts !== 0 ? pts : '—'}
+                        </td>
+                      )
+                    })}
+                    <td className="text-center py-2 px-3 font-bold tabular-nums"
+                      style={{ color: '#F5C518', fontFamily: 'Impact, sans-serif', fontSize: '0.85rem', outline: sortCol === 'total' ? '1px solid rgba(245,197,24,0.3)' : 'none' }}>
+                      {player.total.toLocaleString()}
+                    </td>
+                  </tr>
+                  {gap !== null && gap > 0 && (
+                    <tr key={`gap-${i}`}>
+                      <td colSpan={periods.length + 2} className="text-center py-0.5">
+                        <span className="text-[10px] text-white/20">▼ {gap} pts gap ▼</span>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
   const [funStats, setFunStats] = useState<FunStat[]>([])
@@ -490,72 +583,9 @@ export default function RankingPage() {
         </>
       )}
 
-      {tab === 'breakdown' && breakdown && breakdown.players.length > 0 && (() => {
-        const { periods, players } = breakdown
-        // Max absolute value per period for color scaling
-        const maxPerPeriod = periods.map((_, pi) =>
-          Math.max(...players.map(p => Math.abs(p.earned[pi] ?? 0)), 1)
-        )
-        return (
-          <div>
-            <p className="text-white/40 text-xs mb-4">Points earned by each player per matchday. Gaps show distance to the next player.</p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr>
-                    <th className="text-left py-2 pr-4 text-white/30 font-normal sticky left-0" style={{ background: '#0a0f1e', minWidth: 120 }}>Player</th>
-                    {periods.map(p => (
-                      <th key={p} className="text-center py-2 px-3 text-white/30 font-bold uppercase tracking-wider" style={{ minWidth: 56 }}>{p}</th>
-                    ))}
-                    <th className="text-center py-2 px-3 text-white/50 font-bold uppercase tracking-wider" style={{ minWidth: 72 }}>Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {players.map((player, i) => {
-                    const gap = i < players.length - 1 ? player.total - players[i + 1].total : null
-                    return (
-                      <>
-                        <tr key={player.name}
-                          style={{ background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                          <td className="py-2 pr-4 font-bold text-white/80 sticky left-0" style={{ background: i % 2 === 0 ? '#0d1525' : '#0a0f1e' }}>
-                            <span className="text-white/30 mr-1.5">#{i + 1}</span>{player.name}
-                          </td>
-                          {player.earned.map((pts, pi) => {
-                            const intensity = Math.min(1, Math.abs(pts) / maxPerPeriod[pi])
-                            const bg = pts > 0
-                              ? `rgba(74,202,106,${intensity * 0.45})`
-                              : pts < 0
-                              ? `rgba(215,38,56,${intensity * 0.45})`
-                              : 'transparent'
-                            const color = pts > 0 ? '#4ACA6A' : pts < 0 ? '#D72638' : 'rgba(255,255,255,0.2)'
-                            return (
-                              <td key={pi} className="text-center py-2 px-3 tabular-nums font-bold rounded"
-                                style={{ background: bg, color }}>
-                                {pts > 0 ? '+' : ''}{pts !== 0 ? pts : '—'}
-                              </td>
-                            )
-                          })}
-                          <td className="text-center py-2 px-3 font-bold tabular-nums"
-                            style={{ color: '#F5C518', fontFamily: 'Impact, sans-serif', fontSize: '0.85rem' }}>
-                            {player.total.toLocaleString()}
-                          </td>
-                        </tr>
-                        {gap !== null && gap > 0 && (
-                          <tr key={`gap-${i}`}>
-                            <td colSpan={periods.length + 2} className="text-center py-0.5">
-                              <span className="text-[10px] text-white/20">▼ {gap} pts gap ▼</span>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })()}
+      {tab === 'breakdown' && breakdown && breakdown.players.length > 0 && (
+        <BreakdownTable periods={breakdown.periods} players={breakdown.players} />
+      )}
 
       {tab === 'fun_stats' && funStats.length > 0 && (
         <div>
