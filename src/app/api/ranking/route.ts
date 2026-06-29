@@ -227,7 +227,11 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
   // Count how many players picked each team (including wildcard old teams)
   const picksCount = new Map<string, number>()
   for (const p of picks) {
-    const teams = new Set([p.team1, p.team2, p.team3, p.team4, p.team5].filter(Boolean) as string[])
+    const teams = new Set([
+      p.team1, p.team2, p.team3, p.team4, p.team5,
+      p.wildcard_old_team1, p.wildcard_old_team2, p.wildcard_old_team3,
+      p.wildcard_old_team4, p.wildcard_old_team5,
+    ].filter(Boolean) as string[])
     for (const t of teams) picksCount.set(t, (picksCount.get(t) ?? 0) + 1)
   }
 
