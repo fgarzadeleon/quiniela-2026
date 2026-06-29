@@ -9,7 +9,7 @@ interface FunStat { icon: string; label: string; playerName: string; value: stri
 interface TeamTableRow {
   name: string; code: string; tier: string; cost: number
   picks_count: number; wins: number; draws: number; losses: number
-  gf: number; ga: number; pts: number; advance_pts: number
+  gf: number; ga: number; pts: number; advance_pts: number; advance_rounds: number
 }
 interface HostCounts { USA: number; Mexico: number; Canada: number; total: number }
 interface HostStats { questions: Record<string, HostCounts>; answers: Record<string, string | null> }
@@ -524,7 +524,7 @@ export default function RankingPage() {
 
       {tab === 'teams' && teamTable.length > 0 && (
         <div>
-          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked. 🏅 = round advanced bonus (group qualification + knockout progression).</p>
+          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked. 🏅 AR = rounds advanced (group qualification + knockout progression).</p>
           <div className="space-y-2">
             {teamTable.map((t, i) => {
               const positive = t.pts > 0
@@ -557,8 +557,8 @@ export default function RankingPage() {
                     <div className="flex gap-3 mt-1 text-[11px] text-white/40 flex-wrap">
                       <span>{t.wins}W {t.draws}D {t.losses}L</span>
                       <span>{t.gf}:{t.ga} GD {t.gf - t.ga > 0 ? '+' : ''}{t.gf - t.ga}</span>
-                      {t.advance_pts > 0 && (
-                        <span style={{ color: '#F5C518' }}>🏅 +{t.advance_pts} round advanced</span>
+                      {t.advance_rounds > 0 && (
+                        <span style={{ color: '#F5C518' }}>🏅 {t.advance_rounds}AR</span>
                       )}
                     </div>
                   </div>

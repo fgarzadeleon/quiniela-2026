@@ -76,7 +76,7 @@ interface FunStat { icon: string; label: string; playerName: string; value: stri
 interface TeamTableRow {
   name: string; code: string; tier: string; cost: number
   picks_count: number; wins: number; draws: number; losses: number
-  gf: number; ga: number; pts: number; advance_pts: number
+  gf: number; ga: number; pts: number; advance_pts: number; advance_rounds: number
 }
 
 function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
@@ -100,9 +100,9 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
     const team = getTeam(teamName)
     if (!team) continue
     const scoring = SCORING[team.tier as 'A' | 'B' | 'C' | 'D']
-    let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0, advance_pts = 0
+    let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0, advance_pts = 0, advance_rounds = 0
 
-    if (groupQualifiers.has(teamName)) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
+    if (groupQualifiers.has(teamName)) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
 
     for (const stage of STAGE_ORDER) {
       const stageMatches = scoreable.filter(
@@ -110,7 +110,7 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
       )
       if (stageMatches.length === 0) continue
 
-      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
+      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
 
       // R32: award R16 entry advance proactively for winners (confirmed to play in R16).
       // Only if no R16 matches exist yet for this team (avoids double-count when R16 starts).
@@ -123,7 +123,7 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
             const ga = isHome ? m.away_score : m.home_score
             return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
           })
-          if (wonR32) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
+          if (wonR32) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
         }
       }
 
@@ -145,7 +145,7 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
       }
     }
 
-    rows.push({ name: teamName, code: team.code, tier: team.tier, cost: team.cost, picks_count: count, wins, draws, losses, gf, ga, pts, advance_pts })
+    rows.push({ name: teamName, code: team.code, tier: team.tier, cost: team.cost, picks_count: count, wins, draws, losses, gf, ga, pts, advance_pts, advance_rounds })
   }
 
   return rows.sort((a, b) => b.pts - a.pts)
