@@ -524,7 +524,7 @@ export default function RankingPage() {
 
       {tab === 'teams' && teamTable.length > 0 && (
         <div>
-          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked. 🏅 = classification bonus (group qualification + round advancement).</p>
+          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked. 🏅 = round advanced bonus (group qualification + knockout progression).</p>
           <div className="space-y-2">
             {teamTable.map((t, i) => {
               const positive = t.pts > 0
@@ -558,7 +558,7 @@ export default function RankingPage() {
                       <span>{t.wins}W {t.draws}D {t.losses}L</span>
                       <span>{t.gf}:{t.ga} GD {t.gf - t.ga > 0 ? '+' : ''}{t.gf - t.ga}</span>
                       {t.advance_pts > 0 && (
-                        <span style={{ color: '#F5C518' }}>🏅 +{t.advance_pts} classification</span>
+                        <span style={{ color: '#F5C518' }}>🏅 +{t.advance_pts} round advanced</span>
                       )}
                     </div>
                   </div>

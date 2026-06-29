@@ -62,6 +62,7 @@ export interface Match {
   match_date: string
   stage: MatchStage
   group_name?: string
+  winner?: string | null  // 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null — from FD score.winner
 }
 
 export interface RankedPick extends Pick {

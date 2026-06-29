@@ -71,6 +71,7 @@ export async function GET() {
     const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
     const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
     const stage = STAGE_MAP[m.stage as string]
+    const winner = (m.score as Record<string, unknown>)?.winner as string | null
     if (!home || !away || !stage) continue
     allMatches.push({
       id: String(m.id),
@@ -82,6 +83,7 @@ export async function GET() {
       match_date: m.utcDate as string,
       stage,
       group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
+      winner,
     } as Match)
   }
 

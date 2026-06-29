@@ -256,16 +256,29 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       let pts = scoreTeamMatches(teamName, teamMatches)
 
       // GROUP_STAGE: advancement handled via groupQualifiers above (not here)
-      // ROUND_OF_32: match results only — advancement was already counted in GROUP_STAGE
+      // ROUND_OF_32: award R16 entry advance proactively for winners confirmed to play in R16.
+      //   Only if no R16 matches exist yet (avoids double-count when R16 starts).
       // R16+: advanceRound means "you won your previous knockout match to get here"
-      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') {
+      if (stage === 'ROUND_OF_32') {
+        const hasR16 = finishedMatches.some(m => m.stage === 'ROUND_OF_16' && (m.home_team === teamName || m.away_team === teamName))
+        if (!hasR16) {
+          const wonR32 = teamMatches.some(m => {
+            const isHome = m.home_team === teamName
+            const gf = isHome ? m.home_score : m.away_score
+            const ga = isHome ? m.away_score : m.home_score
+            return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          })
+          if (wonR32) pts += scoring.advanceRound
+        }
+      } else if (stage !== 'GROUP_STAGE') {
         pts += scoring.advanceRound
         if (stage === 'FINAL') {
           const finalMatch = teamMatches[0]
           const isHome = finalMatch.home_team === teamName
           const gf = isHome ? finalMatch.home_score : finalMatch.away_score
           const ga = isHome ? finalMatch.away_score : finalMatch.home_score
-          if (gf > ga) pts += scoring.champion
+          const wonFinal = gf > ga || (gf === ga && finalMatch.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          if (wonFinal) pts += scoring.champion
         }
       }
 

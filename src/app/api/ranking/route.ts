@@ -46,10 +46,10 @@ async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string
       if (!SCOREABLE_STATUSES.has(fdStatus)) continue
       const score = m.score as Record<string, Record<string, number | null>>
       // In knockout rounds, use extraTime score if available (ET winner scores as WIN/LOSS).
-      // Penalties don't change the score — both teams get DRAW, advance bonus comes from
-      // appearing in the next stage.
+      // For penalty shootouts: extraTime score is tied; winner is determined by score.winner field.
       const homeScore = score?.extraTime?.home ?? score?.fullTime?.home
       const awayScore = score?.extraTime?.away ?? score?.fullTime?.away
+      const winner = (m.score as Record<string, unknown>)?.winner as string | null
       const stage = STAGE_MAP[m.stage as string]
       if (homeScore == null || awayScore == null || !stage) continue
       const isLive = LIVE_STATUSES.has(fdStatus)
@@ -64,6 +64,7 @@ async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string
         match_date: m.utcDate as string,
         stage,
         group_name: (m.group as string | undefined)?.replace('GROUP_', ''),
+        winner,
       } as Match)
     }
     return { matches: result, liveTeams }
@@ -111,6 +112,21 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
 
       if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
 
+      // R32: award R16 entry advance proactively for winners (confirmed to play in R16).
+      // Only if no R16 matches exist yet for this team (avoids double-count when R16 starts).
+      if (stage === 'ROUND_OF_32') {
+        const hasR16 = scoreable.some(m => m.stage === 'ROUND_OF_16' && (m.home_team === teamName || m.away_team === teamName))
+        if (!hasR16) {
+          const wonR32 = stageMatches.some(m => {
+            const isHome = m.home_team === teamName
+            const gf = isHome ? m.home_score : m.away_score
+            const ga = isHome ? m.away_score : m.home_score
+            return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          })
+          if (wonR32) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
+        }
+      }
+
       for (const m of stageMatches) {
         const isHome = m.home_team === teamName
         const goalsFor = isHome ? m.home_score : m.away_score
@@ -121,7 +137,11 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
         else { losses++; pts += scoring.loss }
         pts += goalsFor * scoring.goalFor
         pts += goalsAgainst * scoring.goalAgainst
-        if (stage === 'FINAL' && goalsFor > goalsAgainst) { pts += scoring.champion; advance_pts += scoring.champion }
+        // Final: champion bonus for winner (handles PSO via winner field)
+        if (stage === 'FINAL') {
+          const wonFinal = goalsFor > goalsAgainst || (goalsFor === goalsAgainst && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          if (wonFinal) { pts += scoring.champion; advance_pts += scoring.champion }
+        }
       }
     }
 
