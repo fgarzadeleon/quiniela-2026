@@ -16,7 +16,8 @@ const FD_TO_OURS: Record<string, string> = {
 }
 
 // Returns { pts, advancePts } so MatchCard can display the advance bonus separately.
-// advancePts > 0 only for R16+ knockout winners (incl. Final champion bonus).
+// advancePts > 0 for knockout winners: R32 winner earns the R16 entry advance,
+// R16+ winner earns the next-round entry advance, Final winner also earns champion bonus.
 function teamPoints(fdName: string, gf: number, ga: number, stage: string, winner: string | null, side: 'home' | 'away'): { pts: number; advancePts: number } | null {
   const ourName = FD_TO_OURS[fdName] ?? fdName
   const team = TEAM_MAP.get(ourName)
@@ -25,8 +26,8 @@ function teamPoints(fdName: string, gf: number, ga: number, stage: string, winne
   const base = gf > ga ? s.win : gf === ga ? s.draw : s.loss
   const matchPts = base + gf * s.goalFor + ga * s.goalAgainst
 
-  // Round Advanced bonus: R16, QF, SF, Final (NOT R32)
-  const advanceStages = new Set(['ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'])
+  // Round Advanced bonus: R32 winner earns R16 entry; R16/QF/SF/Final winner earns next-round entry
+  const advanceStages = new Set(['LAST_32', 'ROUND_OF_32', 'LAST_16', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'])
   let advancePts = 0
   if (advanceStages.has(stage)) {
     const sideWon = winner === (side === 'home' ? 'HOME_TEAM' : 'AWAY_TEAM')
