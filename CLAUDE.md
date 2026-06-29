@@ -19,8 +19,7 @@ Tournament is in the **Round of 32** (knockout stage). Group stage is fully comp
 - **Next.js** (App Router, `force-dynamic` on all API routes)
 - **Supabase** (Postgres, service role key for all server writes)
 - **Tailwind CSS v4** (`@theme inline` in `globals.css` — not the v3 config file)
-- **football-data.org API** — primary source for all match data (live subscription). Key: `FOOTBALL_DATA_API_KEY`
-- **footballdata.io API** — fallback only if FD is down. Key: `FDIO_API_KEY`
+- **football-data.org API** — sole source for all match data (live subscription). Key: `FOOTBALL_DATA_API_KEY`
 
 ## Environment Variables (`.env.local` — never commit)
 
@@ -29,7 +28,6 @@ NEXT_PUBLIC_SUPABASE_URL=https://rizrofntveuxpwktqfhl.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_...
 FOOTBALL_DATA_API_KEY=59f9b26e489247708e7b68f9bd08f7e8
-FDIO_API_KEY=fd_7d485cebce87558df108c94d56c3937fa405f02f7a7ce1aa
 ADMIN_PASSWORD=quiniela2026
 ```
 
@@ -39,7 +37,7 @@ ADMIN_PASSWORD=quiniela2026
 - Pick **3 goalscorers** from your selected teams
 - No two players can share the same 5-team combo (including wildcarded-away lineups)
 - **Deadline: 2026-06-11T19:00:00Z** — hardcoded in multiple files, search `DEADLINE` to find all
-- One **Wildcard** per player post-deadline: keep ≥2 teams, swap the rest. Scorers do NOT auto-change — must be updated manually when wildcarding.
+- One **Wildcard** per player post-deadline: keep 2–4 teams, swap the rest. Scorers must be updated if a team they belong to is swapped out; they can be changed to any player from the new lineup.
 
 ## Scoring (per team, per match)
 

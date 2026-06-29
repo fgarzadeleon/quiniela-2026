@@ -1,27 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { FD_TO_OURS } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
-const ADMIN_PW = process.env.ADMIN_PASSWORD ?? 'quiniela2026'
+const ADMIN_PW = process.env.ADMIN_PASSWORD
 
-// football-data.org team name → our team name (for mismatches only)
-const FD_TO_OURS: Record<string, string> = {
-  'United States':      'USA',
-  'Korea Republic':     'South Korea',
-  "Côte d'Ivoire":      'Ivory Coast',
-  'Ivory Coast':        'Ivory Coast',
-  'Cape Verde Islands': 'Cape Verde',
-  'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
-  'Czechia':            'Czech Republic',
-  'Congo DR':           'DR Congo',
-  'Curaçao':            'Curacao',
-  'Türkiye':            'Turkey',
-}
-
-// football-data.org stage → our stage (handles variant spellings)
 const STAGE_MAP: Record<string, string> = {
   GROUP_STAGE:    'GROUP_STAGE',
   LAST_32:        'ROUND_OF_32',
@@ -33,13 +19,9 @@ const STAGE_MAP: Record<string, string> = {
   FINAL:          'FINAL',
 }
 
-function ourName(fdName: string): string {
-  return FD_TO_OURS[fdName] ?? fdName
-}
-
 export async function POST(req: NextRequest) {
   const { password } = await req.json()
-  if (password !== ADMIN_PW) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!ADMIN_PW || password !== ADMIN_PW) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!FD_KEY) return NextResponse.json({ error: 'FOOTBALL_DATA_API_KEY not set' }, { status: 503 })
 
   const fdRes = await fetch(`${FD_BASE}/competitions/WC/matches`, {
@@ -54,12 +36,18 @@ export async function POST(req: NextRequest) {
   const fdMatches: unknown[] = fdJson.matches ?? []
   const supabase = createServerClient()
   const log: string[] = []
-  let updated = 0
-  let inserted = 0
-  let skipped = 0
-  let finished = 0
+  let updated = 0, inserted = 0, skipped = 0, finished = 0
 
   log.push(`football-data.org returned ${fdMatches.length} matches total`)
+
+  // Batch-fetch all existing matches once to avoid O(N) sequential queries
+  const { data: existingRows } = await supabase
+    .from('matches')
+    .select('id, home_team, away_team, stage, status')
+  const existingMap = new Map<string, { id: string; status: string }>()
+  for (const row of existingRows ?? []) {
+    existingMap.set(`${row.home_team}|${row.away_team}|${row.stage}`, { id: row.id, status: row.status })
+  }
 
   for (const m of fdMatches as Record<string, unknown>[]) {
     const ourStage = STAGE_MAP[(m.stage as string) ?? '']
@@ -67,8 +55,8 @@ export async function POST(req: NextRequest) {
 
     const homeTeam = m.homeTeam as Record<string, string> | undefined
     const awayTeam = m.awayTeam as Record<string, string> | undefined
-    const home = ourName(homeTeam?.name ?? '')
-    const away = ourName(awayTeam?.name ?? '')
+    const home = FD_TO_OURS[homeTeam?.name ?? ''] ?? homeTeam?.name ?? ''
+    const away = FD_TO_OURS[awayTeam?.name ?? ''] ?? awayTeam?.name ?? ''
     if (!home || !away) { skipped++; continue }
 
     const score = m.score as Record<string, Record<string, number | null>> | undefined
@@ -79,15 +67,7 @@ export async function POST(req: NextRequest) {
     if (!isFinished) { skipped++; continue }
     finished++
 
-    // Look up existing row
-    const { data: existing } = await supabase
-      .from('matches')
-      .select('id, status')
-      .eq('home_team', home)
-      .eq('away_team', away)
-      .eq('stage', ourStage)
-      .maybeSingle()
-
+    const existing = existingMap.get(`${home}|${away}|${ourStage}`)
     if (existing) {
       if (existing.status === 'FINISHED') { skipped++; continue }
       const { error } = await supabase
@@ -98,7 +78,6 @@ export async function POST(req: NextRequest) {
       log.push(`✓ ${home} ${homeScore}–${awayScore} ${away}`)
       updated++
     } else {
-      // Insert — works for both group stage and knockout fixtures
       const group = (m.group as string | undefined)?.replace('GROUP_', '') ?? null
       const { error } = await supabase.from('matches').insert({
         home_team: home,

@@ -91,6 +91,20 @@ export const STAGE_ORDER = [
   'FINAL',
 ]
 
+// football-data.org team name → our canonical team name (only entries that differ)
+export const FD_TO_OURS: Record<string, string> = {
+  'United States':      'USA',
+  'Korea Republic':     'South Korea',
+  "Côte d'Ivoire":      'Ivory Coast',
+  'Ivory Coast':        'Ivory Coast',
+  'Cape Verde Islands': 'Cape Verde',
+  'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
+  'Czechia':            'Czech Republic',
+  'Congo DR':           'DR Congo',
+  'Curaçao':            'Curacao',
+  'Türkiye':            'Turkey',
+}
+
 export function getTeam(name: string): Team | undefined {
   return TEAM_MAP.get(name)
 }

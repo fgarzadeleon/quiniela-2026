@@ -2,23 +2,13 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { fetchSquadMap, isValidScorer } from '@/lib/squad-validation'
 import { WILDCARD_DEADLINES } from '@/lib/scoring'
+import { FD_TO_OURS } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
 
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
-
-const FD_TO_OURS: Record<string, string> = {
-  'United States':      'USA',
-  'Korea Republic':     'South Korea',
-  "Côte d'Ivoire":      'Ivory Coast',
-  'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
-  'Czechia':            'Czech Republic',
-  'Congo DR':           'DR Congo',
-  'Curaçao':            'Curacao',
-  'Türkiye':            'Turkey',
-}
 
 const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
   GROUP_STAGE_MD2: 'MD2', GROUP_STAGE_MD3: 'MD3',
@@ -42,8 +32,8 @@ function lookupGoals(pickName: string, goalsMap: Map<string, number>): { goals: 
   for (const [fdNorm, goals] of goalsMap) {
     const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
     const matches =
-      (pLast.length > 3 && pLast === fdLast) ||
-      (pn.length > 4 && fdNorm.includes(pn))
+      (pLast.length >= 3 && pLast === fdLast) ||
+      (pn.length >= 4 && fdNorm.includes(pn))
     if (matches && (!bestMatch || goals > bestMatch.goals)) {
       bestMatch = { goals, matched: true }
     }

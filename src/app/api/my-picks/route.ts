@@ -138,12 +138,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
   }
 
-  const { keepTeams, newTeam1, newTeam2, newTeam3, scorer1, scorer2, scorer3 } = body
+  const { keepTeams, newTeams: newTeamsBody, scorer1, scorer2, scorer3 } = body
   const keepList: string[] = Array.isArray(keepTeams) ? keepTeams : []
-  const newTeams = [newTeam1, newTeam2, newTeam3].filter(Boolean)
+  const newTeams: string[] = Array.isArray(newTeamsBody) ? newTeamsBody.filter(Boolean) : []
 
-  if (keepList.length !== 2 || newTeams.length !== 3) {
-    return NextResponse.json({ error: 'Must keep exactly 2 teams and pick 3 new ones' }, { status: 400 })
+  if (keepList.length < 2 || keepList.length + newTeams.length !== 5) {
+    return NextResponse.json({ error: 'Must keep 2–4 teams with a total of 5 teams' }, { status: 400 })
   }
 
   const originalTeams = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]

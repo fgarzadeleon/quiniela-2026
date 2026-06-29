@@ -106,13 +106,13 @@ export async function GET(req: NextRequest) {
       function ranking() {
         const fin = store.finished()
         return picks
-          .map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost, pts: calculatePickPoints(p, fin) }))
+          .map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, team5: p.team5, total_cost: p.total_cost, pts: calculatePickPoints(p, fin) }))
           .sort((a, b) => b.pts - a.pts)
           .map((p, i) => ({ ...p, rank: i + 1 }))
       }
 
       // ── Kick off ──
-      send('init', { picks: picks.map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, total_cost: p.total_cost })) })
+      send('init', { picks: picks.map(p => ({ id: p.id, name: p.name, team1: p.team1, team2: p.team2, team3: p.team3, team4: p.team4, team5: p.team5, total_cost: p.total_cost })) })
       await sleep(500)
 
       // ── Group stage ──

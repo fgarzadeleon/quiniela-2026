@@ -161,7 +161,7 @@ export default function MyPicksPage() {
 
   async function handleWildcard(e: React.FormEvent) {
     e.preventDefault()
-    if (keepTeams.length !== 2 || newPicks.length !== 3) return
+    if (keepTeams.length < 2 || keepTeams.length + newPicks.length !== 5) return
     setLoading(true)
     setError('')
     try {
@@ -173,7 +173,7 @@ export default function MyPicksPage() {
           password,
           type: 'wildcard',
           keepTeams,
-          newTeam1: newPicks[0], newTeam2: newPicks[1], newTeam3: newPicks[2],
+          newTeams: newPicks,
           scorer1: wildcardScorers[0].trim() || null,
           scorer2: wildcardScorers[1].trim() || null,
           scorer3: wildcardScorers[2].trim() || null,
@@ -192,8 +192,13 @@ export default function MyPicksPage() {
 
   function toggleKeep(team: string) {
     setKeepTeams(prev => {
-      if (prev.includes(team)) return prev.filter(t => t !== team)
-      if (prev.length >= 2) return prev
+      if (prev.includes(team)) {
+        // Un-locking a keeper: trim newPicks if we now have room for more
+        return prev.filter(t => t !== team)
+      }
+      if (prev.length >= 4) return prev
+      // Locking a new keeper: if newPicks would exceed the new max, trim it
+      setNewPicks(np => np.slice(0, 5 - (prev.length + 1)))
       return [...prev, team]
     })
   }
@@ -201,7 +206,7 @@ export default function MyPicksPage() {
   function toggleNewPick(team: string) {
     setNewPicks(prev => {
       if (prev.includes(team)) return prev.filter(t => t !== team)
-      if (prev.length >= 3) return prev
+      if (prev.length >= 5 - keepTeams.length) return prev
       return [...prev, team]
     })
   }
@@ -218,7 +223,7 @@ export default function MyPicksPage() {
   const wildcardCost = [...keptTeamObjs, ...newPickObjs].reduce((s, t) => s + (t?.cost ?? 0), 0)
   const wildcardATier = [...keptTeamObjs, ...newPickObjs].filter(t => t?.tier === 'A').length
   const wildcardOver = wildcardCost > MAX_BUDGET || wildcardATier > MAX_A_TIER
-  const wildcardReady = keepTeams.length === 2 && newPicks.length === 3 && !wildcardOver
+  const wildcardReady = keepTeams.length >= 2 && keepTeams.length + newPicks.length === 5 && !wildcardOver
 
   const availableTeams = useMemo(() => {
     if (!pick) return []
@@ -422,7 +427,7 @@ export default function MyPicksPage() {
               <span className="text-3xl">🃏</span>
               <div>
                 <h3 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.2rem', color: '#F5C518' }}>WILDCARD</h3>
-                <p className="text-white/50 text-sm">Keep 2 teams, replace the 3 others. Budget rules still apply. <strong className="text-white/70">One use only.</strong></p>
+                <p className="text-white/50 text-sm">Keep 2–4 teams, replace the rest. Budget rules still apply. <strong className="text-white/70">One use only.</strong></p>
               </div>
             </div>
 
@@ -653,7 +658,7 @@ export default function MyPicksPage() {
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🐚</div>
           <h1 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.8rem', color: '#F5C518' }}>WILDCARD</h1>
-          <p className="text-white/50 text-sm mt-2">Lock 2 teams to keep, then pick 3 replacements.</p>
+          <p className="text-white/50 text-sm mt-2">Lock 2–4 teams to keep, then pick the replacements.</p>
           {wcNext && (
             <div className="mt-4 inline-block rounded-lg px-4 py-2.5 text-center" style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}>
               <p className="text-[#F5C518] text-sm font-bold">
@@ -670,12 +675,12 @@ export default function MyPicksPage() {
           className="rounded-xl p-5 mb-6"
         >
           <p className="text-white/60 text-sm uppercase tracking-wider mb-3">
-            Step 1 — Lock 2 teams to keep <span className="text-white/30">({keepTeams.length}/2 locked)</span>
+            Step 1 — Lock 2–4 teams to keep <span className="text-white/30">({keepTeams.length} locked)</span>
           </p>
           <div className="space-y-2">
             {currentTeams.map(t => {
               const locked = keepTeams.includes(t.name)
-              const disabledKeep = !locked && keepTeams.length >= 2
+              const disabledKeep = !locked && keepTeams.length >= 4
               const colors = TIER_COLORS[t.tier]
               return (
                 <button
@@ -704,8 +709,8 @@ export default function MyPicksPage() {
           </div>
         </div>
 
-        {/* Step 2 — pick 3 new teams */}
-        {keepTeams.length === 2 && (
+        {/* Step 2 — pick replacement teams */}
+        {keepTeams.length >= 2 && (
           <div
             style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: '1px solid rgba(255,255,255,0.1)' }}
             className="rounded-xl p-5 mb-6"
@@ -713,7 +718,7 @@ export default function MyPicksPage() {
             {/* Budget tracker */}
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <p className="text-white/60 text-sm uppercase tracking-wider">
-                Step 2 — Pick 3 new teams <span className="text-white/30">({newPicks.length}/3)</span>
+                Step 2 — Pick {5 - keepTeams.length} new team{5 - keepTeams.length !== 1 ? 's' : ''} <span className="text-white/30">({newPicks.length}/{5 - keepTeams.length})</span>
               </p>
               <div className="flex items-center gap-2">
                 <span className={`text-lg font-bold ${wildcardOver ? 'text-[#D72638]' : wildcardCost > 270 ? 'text-[#F5C518]' : 'text-white'}`}>
@@ -745,7 +750,7 @@ export default function MyPicksPage() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                       {tierTeams.map(team => {
                         const picked = newPicks.includes(team.name)
-                        const disabled = !picked && newPicks.length >= 3
+                        const disabled = !picked && newPicks.length >= 5 - keepTeams.length
                         return (
                           <button
                             key={team.name}
@@ -830,7 +835,7 @@ export default function MyPicksPage() {
             className="flex-1 py-3 rounded-xl font-bold text-sm uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             style={{ background: wildcardReady ? 'linear-gradient(135deg, #1B3A8B, #0A1F5C)' : '#1a1a2e', border: '1px solid rgba(100,150,255,0.4)', color: '#6A90F0', fontFamily: 'Impact, sans-serif' }}
           >
-            {loading ? 'Saving...' : wildcardReady ? '🃏 Confirm Wildcard' : keepTeams.length < 2 ? `Lock ${2 - keepTeams.length} more` : `Pick ${3 - newPicks.length} more`}
+            {loading ? 'Saving...' : wildcardReady ? '🃏 Confirm Wildcard' : keepTeams.length < 2 ? `Lock ${2 - keepTeams.length} more` : `Pick ${(5 - keepTeams.length) - newPicks.length} more`}
           </button>
         </div>
       </div>
