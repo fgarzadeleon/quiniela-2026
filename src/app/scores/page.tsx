@@ -15,13 +15,28 @@ const FD_TO_OURS: Record<string, string> = {
   'Türkiye':            'Turkey',
 }
 
-function teamPoints(fdName: string, gf: number, ga: number): number | null {
+// Returns { pts, advancePts } so MatchCard can display the advance bonus separately.
+// advancePts > 0 only for R16+ knockout winners (incl. Final champion bonus).
+function teamPoints(fdName: string, gf: number, ga: number, stage: string, winner: string | null, side: 'home' | 'away'): { pts: number; advancePts: number } | null {
   const ourName = FD_TO_OURS[fdName] ?? fdName
   const team = TEAM_MAP.get(ourName)
   if (!team) return null
   const s = SCORING[team.tier]
   const base = gf > ga ? s.win : gf === ga ? s.draw : s.loss
-  return base + gf * s.goalFor + ga * s.goalAgainst
+  const matchPts = base + gf * s.goalFor + ga * s.goalAgainst
+
+  // Round Advanced bonus: R16, QF, SF, Final (NOT R32)
+  const advanceStages = new Set(['ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'])
+  let advancePts = 0
+  if (advanceStages.has(stage)) {
+    const sideWon = winner === (side === 'home' ? 'HOME_TEAM' : 'AWAY_TEAM')
+    if (sideWon) {
+      advancePts += s.advanceRound
+      if (stage === 'FINAL') advancePts += s.champion
+    }
+  }
+
+  return { pts: matchPts + advancePts, advancePts }
 }
 
 interface HeatMatch {
@@ -51,8 +66,12 @@ interface MatchScore {
   homeTeam: { name: string; crest: string }
   awayTeam: { name: string; crest: string }
   score: {
+    winner?: string | null          // 'HOME_TEAM' | 'AWAY_TEAM' | 'DRAW' | null
+    duration?: string               // 'REGULAR' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT'
     fullTime: { home: number | null; away: number | null }
     halfTime: { home: number | null; away: number | null }
+    extraTime?: { home: number | null; away: number | null }
+    penalties?: { home: number | null; away: number | null }
   }
 }
 
@@ -114,10 +133,16 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
       </div>
 
       {(() => {
-        const hg = match.score.fullTime.home ?? 0
-        const ag = match.score.fullTime.away ?? 0
-        const homePts = hasScore ? teamPoints(match.homeTeam.name, hg, ag) : null
-        const awayPts = hasScore ? teamPoints(match.awayTeam.name, ag, hg) : null
+        const isPSO = match.score.duration === 'PENALTY_SHOOTOUT'
+        const isET = match.score.duration === 'EXTRA_TIME'
+        // Use ET score when decided in extra time; FT score for penalties (tied FT/ET)
+        const hg = (isET ? match.score.extraTime?.home : null) ?? match.score.fullTime.home ?? 0
+        const ag = (isET ? match.score.extraTime?.away : null) ?? match.score.fullTime.away ?? 0
+        const winner = match.score.winner ?? null
+        const homeResult = teamPoints(match.homeTeam.name, hg, ag, match.stage, winner, 'home')
+        const awayResult = teamPoints(match.awayTeam.name, ag, hg, match.stage, winner, 'away')
+        const homePts = hasScore ? homeResult?.pts ?? null : null
+        const awayPts = hasScore ? awayResult?.pts ?? null : null
         return (
           <div className="flex items-center gap-2">
             <div className="flex-1 text-right">
@@ -125,6 +150,9 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
               {homePts != null && (
                 <p className="text-xs font-bold tabular-nums" style={{ color: homePts > 0 ? '#4ACA6A' : homePts < 0 ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
                   {homePts > 0 ? '+' : ''}{homePts} pts
+                  {(homeResult?.advancePts ?? 0) > 0 && (
+                    <span className="ml-1 text-[10px] font-normal" style={{ color: '#F5C518' }}>🏅+{homeResult!.advancePts}</span>
+                  )}
                 </p>
               )}
               {heat && heat.homePickers > 0 && (
@@ -137,9 +165,14 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
               style={{ background: hasScore ? 'rgba(255,255,255,0.08)' : 'transparent' }}
             >
               {hasScore ? (
-                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', letterSpacing: '0.1em' }}>
-                  {hg} – {ag}
-                </span>
+                <div>
+                  <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.3rem', letterSpacing: '0.1em' }}>
+                    {hg} – {ag}
+                  </span>
+                  {(isPSO || isET) && (
+                    <p className="text-[10px] text-white/40 mt-0.5">{isPSO ? 'PSO' : 'AET'}</p>
+                  )}
+                </div>
               ) : (
                 <span className="text-white/40 text-sm">
                   {new Date(match.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -152,6 +185,9 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
               {awayPts != null && (
                 <p className="text-xs font-bold tabular-nums" style={{ color: awayPts > 0 ? '#4ACA6A' : awayPts < 0 ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
                   {awayPts > 0 ? '+' : ''}{awayPts} pts
+                  {(awayResult?.advancePts ?? 0) > 0 && (
+                    <span className="ml-1 text-[10px] font-normal" style={{ color: '#F5C518' }}>🏅+{awayResult!.advancePts}</span>
+                  )}
                 </p>
               )}
               {heat && heat.awayPickers > 0 && (

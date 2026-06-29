@@ -75,7 +75,7 @@ interface FunStat { icon: string; label: string; playerName: string; value: stri
 interface TeamTableRow {
   name: string; code: string; tier: string; cost: number
   picks_count: number; wins: number; draws: number; losses: number
-  gf: number; ga: number; pts: number
+  gf: number; ga: number; pts: number; advance_pts: number
 }
 
 function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
@@ -99,9 +99,9 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
     const team = getTeam(teamName)
     if (!team) continue
     const scoring = SCORING[team.tier as 'A' | 'B' | 'C' | 'D']
-    let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0
+    let wins = 0, draws = 0, losses = 0, gf = 0, ga = 0, pts = 0, advance_pts = 0
 
-    if (groupQualifiers.has(teamName)) pts += scoring.advanceRound
+    if (groupQualifiers.has(teamName)) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
 
     for (const stage of STAGE_ORDER) {
       const stageMatches = scoreable.filter(
@@ -109,7 +109,7 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
       )
       if (stageMatches.length === 0) continue
 
-      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') pts += scoring.advanceRound
+      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') { pts += scoring.advanceRound; advance_pts += scoring.advanceRound }
 
       for (const m of stageMatches) {
         const isHome = m.home_team === teamName
@@ -121,11 +121,11 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
         else { losses++; pts += scoring.loss }
         pts += goalsFor * scoring.goalFor
         pts += goalsAgainst * scoring.goalAgainst
-        if (stage === 'FINAL' && goalsFor > goalsAgainst) pts += scoring.champion
+        if (stage === 'FINAL' && goalsFor > goalsAgainst) { pts += scoring.champion; advance_pts += scoring.champion }
       }
     }
 
-    rows.push({ name: teamName, code: team.code, tier: team.tier, cost: team.cost, picks_count: count, wins, draws, losses, gf, ga, pts })
+    rows.push({ name: teamName, code: team.code, tier: team.tier, cost: team.cost, picks_count: count, wins, draws, losses, gf, ga, pts, advance_pts })
   }
 
   return rows.sort((a, b) => b.pts - a.pts)

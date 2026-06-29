@@ -1,5 +1,9 @@
 @AGENTS.md
 
+# Development Guidelines
+
+**When implementing any feature or fix, check ALL pages and tabs that display related data have the same implementation.** For example: if fixing point calculations, verify the fix applies consistently to Ranking, Scores, By Country, By Matchday, and Scorers. If adding eliminated team styling, verify it appears in the ranking pill view AND the By Country tab. Do not fix something in one place and leave inconsistencies elsewhere.
+
 # Quiniela 2026 — Project Guide
 
 World Cup 2026 pick-em game for 30 players. Live at **quinielalive.live** (Vercel, GitHub: `fgarzadeleon/quiniela-2026`).

@@ -9,7 +9,7 @@ interface FunStat { icon: string; label: string; playerName: string; value: stri
 interface TeamTableRow {
   name: string; code: string; tier: string; cost: number
   picks_count: number; wins: number; draws: number; losses: number
-  gf: number; ga: number; pts: number
+  gf: number; ga: number; pts: number; advance_pts: number
 }
 interface HostCounts { USA: number; Mexico: number; Canada: number; total: number }
 interface HostStats { questions: Record<string, HostCounts>; answers: Record<string, string | null> }
@@ -83,12 +83,13 @@ function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifie
 
 function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
   name: string; points: number; live?: boolean; sub?: SubStatus; wcLabel?: string
-  form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }
+  form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; eliminated?: boolean }
 }) {
   const team = TEAM_MAP.get(name)
   if (!team) return null
   const positive = points > 0
   const negative = points < 0
+  const eliminated = form?.eliminated ?? false
 
   if (sub === 'subOut') {
     return (
@@ -98,7 +99,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
       >
         <span style={{ color: '#FB923C', fontSize: '0.65rem' }}>▼{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
-        <span style={{ color: 'rgba(255,255,255,0.45)' }}>{team.name}</span>
+        <span style={{ color: 'rgba(255,255,255,0.45)', textDecoration: eliminated ? 'line-through' : 'none' }}>{team.name}</span>
         <FormDots form={form} />
         <span className="font-bold tabular-nums" style={{ color: positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
           {points > 0 ? '+' : ''}{points}
@@ -111,11 +112,11 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
     return (
       <span
         className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-        style={{ background: 'rgba(74,202,106,0.1)', border: '1px solid rgba(74,202,106,0.3)' }}
+        style={{ background: 'rgba(74,202,106,0.1)', border: '1px solid rgba(74,202,106,0.3)', opacity: eliminated ? 0.55 : 1 }}
       >
         <span style={{ color: '#4ACA6A', fontSize: '0.65rem' }}>▲{wcLabel && <span style={{ fontSize: '0.6rem', marginLeft: 1 }}>{wcLabel}</span>}</span>
         <Flag code={team.code} name={team.name} size={16} />
-        <span style={{ color: live ? '#FCA5A5' : '#4ACA6A' }}>{team.name}</span>
+        <span style={{ color: live ? '#FCA5A5' : '#4ACA6A', textDecoration: eliminated ? 'line-through' : 'none' }}>{team.name}</span>
         <FormDots form={form} />
         <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
           {points > 0 ? '+' : ''}{points}
@@ -130,16 +131,17 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
     <span
       className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
       style={{
-        background: live ? 'rgba(239,68,68,0.12)' : positive ? 'rgba(74,202,106,0.1)' : negative ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${live ? 'rgba(239,68,68,0.5)' : positive ? 'rgba(74,202,106,0.3)' : negative ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
+        background: live ? 'rgba(239,68,68,0.12)' : eliminated ? 'rgba(255,255,255,0.03)' : positive ? 'rgba(74,202,106,0.1)' : negative ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${live ? 'rgba(239,68,68,0.5)' : eliminated ? 'rgba(255,255,255,0.06)' : positive ? 'rgba(74,202,106,0.3)' : negative ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
+        opacity: eliminated ? 0.55 : 1,
       }}
     >
       <Flag code={team.code} name={team.name} size={16} />
-      <span style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)' }}>
+      <span style={{ color: live ? '#FCA5A5' : eliminated ? 'rgba(255,255,255,0.35)' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.5)', textDecoration: eliminated ? 'line-through' : 'none' }}>
         {team.name}
       </span>
       <FormDots form={form} />
-      <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
+      <span className="font-bold tabular-nums" style={{ color: live ? '#FCA5A5' : eliminated ? 'rgba(255,255,255,0.3)' : positive ? '#4ACA6A' : negative ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
         {points > 0 ? '+' : ''}{points}
       </span>
       {live && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" />}
@@ -256,7 +258,7 @@ export default function RankingPage() {
   const [tab, setTab] = useState<Tab>('ranking')
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
   const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
-  const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices?: number[] }>>({})
+  const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices?: number[]; eliminated?: boolean }>>({})
   const [breakdown, setBreakdown] = useState<{ periods: string[]; players: BreakdownPlayer[] } | null>(null)
 
   useEffect(() => {
@@ -522,11 +524,12 @@ export default function RankingPage() {
 
       {tab === 'teams' && teamTable.length > 0 && (
         <div>
-          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked.</p>
+          <p className="text-white/40 text-xs mb-4">Quiniela points earned by each team in the tournament, ranked. 🏅 = classification bonus (group qualification + round advancement).</p>
           <div className="space-y-2">
             {teamTable.map((t, i) => {
               const positive = t.pts > 0
               const negative = t.pts < 0
+              const eliminated = teamForm[t.name]?.eliminated ?? false
               return (
                 <div
                   key={t.name}
@@ -536,6 +539,7 @@ export default function RankingPage() {
                       ? 'linear-gradient(145deg, #1A1400, #3A2A00)'
                       : 'linear-gradient(145deg, #0D1F4A, #111827)',
                     border: `1px solid ${i === 0 ? '#F5C518' : 'rgba(255,255,255,0.08)'}`,
+                    opacity: eliminated ? 0.65 : 1,
                   }}
                 >
                   <span className="text-white/30 text-sm font-bold w-6 text-center shrink-0">
@@ -544,15 +548,18 @@ export default function RankingPage() {
                   <Flag code={t.code} name={t.name} size={24} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-white font-bold text-sm">{t.name}</span>
+                      <span className="text-white font-bold text-sm" style={{ textDecoration: eliminated ? 'line-through' : 'none' }}>{t.name}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-white/15 text-white/30">
                         Tier {t.tier} · {t.cost}pts
                       </span>
                       <span className="text-[10px] text-white/30">{t.picks_count} {t.picks_count === 1 ? 'pick' : 'picks'}</span>
                     </div>
-                    <div className="flex gap-3 mt-1 text-[11px] text-white/40">
+                    <div className="flex gap-3 mt-1 text-[11px] text-white/40 flex-wrap">
                       <span>{t.wins}W {t.draws}D {t.losses}L</span>
                       <span>{t.gf}:{t.ga} GD {t.gf - t.ga > 0 ? '+' : ''}{t.gf - t.ga}</span>
+                      {t.advance_pts > 0 && (
+                        <span style={{ color: '#F5C518' }}>🏅 +{t.advance_pts} classification</span>
+                      )}
                     </div>
                   </div>
                   <span

@@ -38,7 +38,7 @@ export async function GET() {
     const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
 
     // Build form entries — sort by utcDate (not matchday, which resets to 1 in knockout rounds)
-    type MatchEntry = { result: 'W' | 'D' | 'L'; utcDate: string; pts: number; knockout: boolean; won: boolean }
+    type MatchEntry = { result: 'W' | 'D' | 'L'; utcDate: string; pts: number; knockout: boolean; won: boolean; finished: boolean }
     const formEntries = new Map<string, MatchEntry[]>()
 
     for (const m of matches as Record<string, unknown>[]) {
@@ -55,6 +55,7 @@ export async function GET() {
       const utcDate = m.utcDate as string
       const stage = m.stage as string
       const isKnockout = stage !== 'GROUP_STAGE'
+      const isFinished = status === 'FINISHED'
 
       if (!formEntries.has(home)) formEntries.set(home, [])
       if (!formEntries.has(away)) formEntries.set(away, [])
@@ -68,8 +69,8 @@ export async function GET() {
       const homeAdvanced = isKnockout && (homeResult === 'W' || (homeResult === 'D' && winner === 'HOME_TEAM'))
       const awayAdvanced = isKnockout && (awayResult === 'W' || (awayResult === 'D' && winner === 'AWAY_TEAM'))
 
-      formEntries.get(home)!.push({ result: homeResult, utcDate, pts: homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0, knockout: isKnockout, won: homeAdvanced })
-      formEntries.get(away)!.push({ result: awayResult, utcDate, pts: awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0, knockout: isKnockout, won: awayAdvanced })
+      formEntries.get(home)!.push({ result: homeResult, utcDate, pts: homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0, knockout: isKnockout, won: homeAdvanced, finished: isFinished })
+      formEntries.get(away)!.push({ result: awayResult, utcDate, pts: awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0, knockout: isKnockout, won: awayAdvanced, finished: isFinished })
     }
 
     // Derive qualified teams from FD standings (top 2 per group + best 8 third-place)
@@ -109,9 +110,27 @@ export async function GET() {
       .slice(0, thirdPlace.length === 12 ? 8 : guaranteedSpots)
       .forEach(t => qualifiedTeams.add(t.team))
 
+    // Determine eliminated teams:
+    // - Group: played 3 games and not in qualifiedTeams
+    // - Knockout: last finished knockout game they didn't advance (lost/pens)
+    const eliminatedTeams = new Set<string>()
+    for (const [team, entries] of formEntries) {
+      const groupEntries = entries.filter(e => !e.knockout)
+      const knockoutEntries = entries.filter(e => e.knockout).sort((a, b) => a.utcDate.localeCompare(b.utcDate))
+
+      if (groupEntries.length >= 3 && !qualifiedTeams.has(team)) {
+        eliminatedTeams.add(team)
+      }
+
+      const lastKnockout = knockoutEntries.at(-1)
+      if (lastKnockout && lastKnockout.finished && !lastKnockout.won) {
+        eliminatedTeams.add(team)
+      }
+    }
+
     // Build result: for each team, find which match index was the qualifying one
     // = last match played (they had to finish the group to know they qualified)
-    const result: Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices: number[] }> = {}
+    const result: Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices: number[]; eliminated: boolean }> = {}
 
     for (const [team, entries] of formEntries) {
       // Sort by actual match date — matchday resets to 1 in knockout rounds so can't use it
@@ -142,7 +161,7 @@ export async function GET() {
         }
       }
 
-      result[team] = { results, qualifiedAtIndex: qualifiedIndices.size > 0 ? Math.max(...qualifiedIndices) : null, qualifiedIndices: [...qualifiedIndices] }
+      result[team] = { results, qualifiedAtIndex: qualifiedIndices.size > 0 ? Math.max(...qualifiedIndices) : null, qualifiedIndices: [...qualifiedIndices], eliminated: eliminatedTeams.has(team) }
     }
 
     return NextResponse.json({ form: result }, {
