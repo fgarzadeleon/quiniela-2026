@@ -6,6 +6,43 @@ import { Tier } from '@/types'
 
 export const metadata = { title: 'Rules · Quiniela 2026' }
 
+const CHANGELOG = [
+  {
+    version: '1.2',
+    date: '28 Jun 2026',
+    label: 'Knockout update',
+    color: '#F5C518',
+    changes: [
+      'Added knockout round scoring rules: ET counts as part of the match result, penalties are treated as a draw for match points',
+      'Clarified that the advancing team in a penalty shootout earns the Round Advanced bonus',
+      'Round Advanced bonus is awarded when a team plays in R16 or later (not for R32)',
+    ],
+  },
+  {
+    version: '1.1',
+    date: '11 Jun 2026',
+    label: 'Wildcard clarification',
+    color: '#6A90F0',
+    changes: [
+      'Wildcard scorers do not change automatically — you must update them when submitting your wildcard',
+      'Old scorers keep goals scored before the wildcard effective date',
+      'Duplicate lineup check now includes wildcarded-away lineups to prevent two players sharing the same active scoring roster',
+    ],
+  },
+  {
+    version: '1.0',
+    date: '1 Jun 2026',
+    label: 'Initial rules',
+    color: '#4ACA6A',
+    changes: [
+      'Pick 5 teams from 48 participants, max 300pt budget, max 1 Tier A team',
+      'Pick 3 goalscorers from your selected teams',
+      'One wildcard per player for the whole tournament',
+      'Scoring: Win/Draw/Loss/Goals/Conceded/Round Advanced/Champion per tier',
+    ],
+  },
+]
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div
@@ -52,7 +89,7 @@ export default function RulesPage() {
         >
           THE RULES
         </h1>
-        <p className="text-white/50 text-sm mt-2">Everything you need to know before locking in your picks.</p>
+        <p className="text-white/50 text-sm mt-2">Everything you need to know. Current version: <span style={{ color: '#F5C518' }}>v1.2</span></p>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-10">
@@ -95,7 +132,7 @@ export default function RulesPage() {
 
         <Section title="4. SCORING SYSTEM">
           <p className="text-white/50 text-sm mb-3">Points are awarded after every match. Tier D teams earn more per win to balance out their lower odds.</p>
-          <table className="w-full text-sm">
+          <table className="w-full text-sm mb-4">
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <th className="text-left py-2 text-white/40 font-normal text-xs uppercase tracking-wider">Event</th>
@@ -125,6 +162,24 @@ export default function RulesPage() {
               ))}
             </tbody>
           </table>
+
+          <div className="rounded-lg p-4 space-y-2" style={{ background: 'rgba(245,197,24,0.06)', border: '1px solid rgba(245,197,24,0.15)' }}>
+            <p className="text-[#F5C518] text-xs font-bold uppercase tracking-wider mb-2">🏆 Knockout Round Rules</p>
+            <ul className="space-y-1.5">
+              <Rule>
+                <strong className="text-white">Extra time counts as part of the match.</strong> If a team wins 2–1 in extra time (after 1–1 at 90 min), they earn a Win and their opponent a Loss.
+              </Rule>
+              <Rule>
+                <strong className="text-white">Penalty shootouts count as a Draw for match points.</strong> Both teams earn Draw points — because regulation + extra time ended level. The team that wins on penalties earns the <strong className="text-white">Round Advanced</strong> bonus.
+              </Rule>
+              <Rule>
+                <strong className="text-white">Round Advanced bonus triggers from R16 onwards.</strong> It is awarded for each round a team plays in from R16 through the Final — not for R32. So a team reaching the Final earns it 4 times.
+              </Rule>
+              <Rule>
+                <strong className="text-white">Champion bonus (+500)</strong> is awarded on top of all other Final bonuses for the winning team.
+              </Rule>
+            </ul>
+          </div>
         </Section>
 
         <Section title="5. DEADLINES &amp; LOCKING">
@@ -139,7 +194,8 @@ export default function RulesPage() {
           <ul className="space-y-2 mb-5">
             <Rule>Each player gets <strong className="text-white">one Wildcard</strong> for the entire tournament.</Rule>
             <Rule>Using it lets you <strong className="text-white">keep 2 of your 5 teams</strong> and swap the other 3 for any new teams you want.</Rule>
-            <Rule>You can also update your 3 scorers when you play your Wildcard.</Rule>
+            <Rule>You can also update your 3 scorers when you play your Wildcard. <strong className="text-white">Scorers do not change automatically</strong> — you must pick new ones if you want to.</Rule>
+            <Rule>Old scorers keep goals scored before your wildcard effective date. New scorers count goals from that date onwards.</Rule>
             <Rule>Budget and tier rules still apply to your new combination.</Rule>
             <Rule>Only once. Once it&apos;s gone, it&apos;s gone. If you&apos;re happy with your picks, you never have to use it.</Rule>
             <Rule>
@@ -174,22 +230,49 @@ export default function RulesPage() {
           </Link>
         </div>
 
-        {/* Appendix */}
-        <div className="mt-16 mb-4">
+        {/* Changelog */}
+        <div className="mt-16 mb-8">
           <div className="flex items-center gap-3 mb-6">
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
-            <span
-              style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}
-            >
+            <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}>
+              CHANGELOG
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+          </div>
+          <div className="space-y-3">
+            {CHANGELOG.map(entry => (
+              <div key={entry.version} className="rounded-xl p-4" style={{ background: 'linear-gradient(145deg, #0D1F4A, #111827)', border: `1px solid ${entry.color}22` }}>
+                <div className="flex items-center gap-3 mb-2">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: `${entry.color}22`, color: entry.color, fontFamily: 'Impact, sans-serif', letterSpacing: '0.05em' }}>
+                    v{entry.version}
+                  </span>
+                  <span className="text-white/70 text-sm font-bold">{entry.label}</span>
+                  <span className="text-white/25 text-xs ml-auto">{entry.date}</span>
+                </div>
+                <ul className="space-y-1">
+                  {entry.changes.map((c, i) => (
+                    <li key={i} className="flex items-start gap-2 text-white/50 text-xs leading-relaxed">
+                      <span style={{ color: entry.color }} className="mt-0.5 shrink-0">·</span>
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Appendix */}
+        <div className="mb-4">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.75rem', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}>
               APPENDIX
             </span>
             <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
           </div>
 
-          <h2
-            style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.4rem', letterSpacing: '0.06em', color: '#F5C518' }}
-            className="mb-1"
-          >
+          <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.4rem', letterSpacing: '0.06em', color: '#F5C518' }} className="mb-1">
             ALL 48 TEAMS BY TIER
           </h2>
           <p className="text-white/40 text-xs mb-6">Costs based on betting odds (OddsChecker avg, 07/06/2026). Formula: cost = round5(−35.64 × log₁₀(odds) + 126.54), min 10.</p>
@@ -206,10 +289,7 @@ export default function RulesPage() {
             return (
               <div key={tier} className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
-                  <span
-                    className="text-xs font-bold px-2 py-0.5 rounded"
-                    style={{ background: `${color}22`, border: `1px solid ${color}44`, color }}
-                  >
+                  <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: `${color}22`, border: `1px solid ${color}44`, color }}>
                     TIER {tier}
                   </span>
                   <span className="text-white/60 text-xs">{label}</span>
@@ -217,11 +297,7 @@ export default function RulesPage() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                   {tierTeams.map(t => (
-                    <div
-                      key={t.name}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg"
-                      style={{ background: `${color}08`, border: `1px solid ${color}18` }}
-                    >
+                    <div key={t.name} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: `${color}08`, border: `1px solid ${color}18` }}>
                       <Flag code={t.code} name={t.name} size={20} />
                       <span className="text-white/80 text-xs truncate flex-1">{t.name}</span>
                       <span className="text-white/30 text-xs tabular-nums flex-shrink-0">{t.cost}</span>
