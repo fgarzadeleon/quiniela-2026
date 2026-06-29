@@ -37,32 +37,39 @@ export async function GET() {
     const { matches = [] } = matchesRes
     const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
 
-    // Build form entries from group stage matches
-    type MatchEntry = { result: 'W' | 'D' | 'L'; matchday: number; pts: number; knockout?: boolean; won?: boolean }
+    // Build form entries — sort by utcDate (not matchday, which resets to 1 in knockout rounds)
+    type MatchEntry = { result: 'W' | 'D' | 'L'; utcDate: string; pts: number; knockout: boolean; won: boolean }
     const formEntries = new Map<string, MatchEntry[]>()
 
     for (const m of matches as Record<string, unknown>[]) {
       const status = m.status as string
       if (status !== 'FINISHED' && !LIVE.has(status)) continue
       const score = m.score as Record<string, Record<string, number | null>>
-      const hg = score?.fullTime?.home
-      const ag = score?.fullTime?.away
+      const hg = score?.extraTime?.home ?? score?.fullTime?.home
+      const ag = score?.extraTime?.away ?? score?.fullTime?.away
       if (hg == null || ag == null) continue
       const homeTeam = m.homeTeam as Record<string, string>
       const awayTeam = m.awayTeam as Record<string, string>
       const home = FD_TO_OURS[homeTeam?.name] ?? homeTeam?.name ?? ''
       const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
-      const matchday = (m.matchday as number) ?? 0
+      const utcDate = m.utcDate as string
+      const stage = m.stage as string
+      const isKnockout = stage !== 'GROUP_STAGE'
+
       if (!formEntries.has(home)) formEntries.set(home, [])
       if (!formEntries.has(away)) formEntries.set(away, [])
 
-      const stage = m.stage as string
       const homeResult: 'W' | 'D' | 'L' = hg > ag ? 'W' : hg === ag ? 'D' : 'L'
       const awayResult: 'W' | 'D' | 'L' = hg < ag ? 'W' : hg === ag ? 'D' : 'L'
-      const isKnockout = stage !== 'GROUP_STAGE'
-      // In knockout rounds, winner advances — mark with a flag for ring logic
-      formEntries.get(home)!.push({ result: homeResult, matchday, pts: homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0, knockout: isKnockout, won: homeResult === 'W' })
-      formEntries.get(away)!.push({ result: awayResult, matchday, pts: awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0, knockout: isKnockout, won: awayResult === 'W' })
+
+      // For penalty shootouts: ET score is level (both get D for match result),
+      // but the winner field tells us who actually advanced (gets gold ring)
+      const winner = (m.score as Record<string, unknown>)?.winner as string | null
+      const homeAdvanced = isKnockout && (homeResult === 'W' || (homeResult === 'D' && winner === 'HOME_TEAM'))
+      const awayAdvanced = isKnockout && (awayResult === 'W' || (awayResult === 'D' && winner === 'AWAY_TEAM'))
+
+      formEntries.get(home)!.push({ result: homeResult, utcDate, pts: homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0, knockout: isKnockout, won: homeAdvanced })
+      formEntries.get(away)!.push({ result: awayResult, utcDate, pts: awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0, knockout: isKnockout, won: awayAdvanced })
     }
 
     // Derive qualified teams from FD standings (top 2 per group + best 8 third-place)
@@ -104,35 +111,38 @@ export async function GET() {
 
     // Build result: for each team, find which match index was the qualifying one
     // = last match played (they had to finish the group to know they qualified)
-    const result: Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }> = {}
+    const result: Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices: number[] }> = {}
 
     for (const [team, entries] of formEntries) {
-      const sorted = entries.sort((a, b) => a.matchday - b.matchday)
+      // Sort by actual match date — matchday resets to 1 in knockout rounds so can't use it
+      const sorted = entries.sort((a, b) => a.utcDate.localeCompare(b.utcDate))
       const results = sorted.map(e => e.result)
 
-      let qualifiedAtIndex: number | null = null
+      // Build qualifiedAtIndex: every match where the team advanced gets a ring
+      // For group stage: the qualifying match (6pts early or last group match)
+      // For knockouts: every win = advancing, so ring on that dot
+      const qualifiedIndices = new Set<number>()
 
-      // Knockout round wins: mark each winning knockout match with the ring
-      // (the win = advancing to next round)
-      const knockoutWinIndices = sorted
-        .map((e, i) => ({ e, i }))
-        .filter(({ e }) => e.knockout && e.won)
-        .map(({ i }) => i)
+      // Knockout wins
+      sorted.forEach((e, i) => { if (e.knockout && e.won) qualifiedIndices.add(i) })
 
-      if (knockoutWinIndices.length > 0) {
-        // Use the most recent knockout win for the ring
-        qualifiedAtIndex = knockoutWinIndices[knockoutWinIndices.length - 1]
-      } else if (qualifiedTeams.has(team)) {
-        // Group stage: early 6pts match, or last match if qualified on fewer pts
+      // Group stage qualification (only if no knockout wins yet, i.e. still in group stage)
+      if (qualifiedIndices.size === 0 && qualifiedTeams.has(team)) {
         let cumPts = 0
+        let found = false
         for (let i = 0; i < sorted.length; i++) {
+          if (sorted[i].knockout) continue // skip knockout entries for group pts calc
           cumPts += sorted[i].pts
-          if (cumPts >= 6) { qualifiedAtIndex = i; break }
+          if (cumPts >= 6) { qualifiedIndices.add(i); found = true; break }
         }
-        if (qualifiedAtIndex === null) qualifiedAtIndex = sorted.length - 1
+        if (!found) {
+          // Qualified on fewer than 6pts — mark last group match
+          const lastGroupIdx = sorted.map((e, i) => ({ e, i })).filter(({ e }) => !e.knockout).at(-1)?.i
+          if (lastGroupIdx !== undefined) qualifiedIndices.add(lastGroupIdx)
+        }
       }
 
-      result[team] = { results, qualifiedAtIndex }
+      result[team] = { results, qualifiedAtIndex: qualifiedIndices.size > 0 ? Math.max(...qualifiedIndices) : null, qualifiedIndices: [...qualifiedIndices] }
     }
 
     return NextResponse.json({ form: result }, {

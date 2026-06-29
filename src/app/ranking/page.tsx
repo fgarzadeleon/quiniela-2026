@@ -58,18 +58,19 @@ const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
 
 type SubStatus = 'normal' | 'subOut' | 'subIn'
 
-function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null } }) {
+function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices?: number[] } }) {
   if (!form || form.results.length === 0) return null
   const colors: Record<string, string> = { W: '#4ACA6A', D: 'rgba(255,255,255,0.35)', L: '#D72638' }
+  const goldSet = new Set(form.qualifiedIndices ?? (form.qualifiedAtIndex !== null ? [form.qualifiedAtIndex] : []))
   return (
     <span className="flex items-center gap-0.5">
       {form.results.map((r, i) => {
-        const isQualified = form.qualifiedAtIndex === i
+        const isGold = goldSet.has(i)
         return (
-          <span key={i} title={isQualified ? 'Qualified!' : r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
+          <span key={i} title={isGold ? 'Advanced!' : r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
             style={{
               width: 7, height: 7, borderRadius: '50%',
-              background: isQualified
+              background: isGold
                 ? `radial-gradient(circle, ${colors[r]} 55%, #F5C518 55%)`
                 : colors[r],
               display: 'inline-block', flexShrink: 0,
@@ -255,7 +256,7 @@ export default function RankingPage() {
   const [tab, setTab] = useState<Tab>('ranking')
   const [hostStats, setHostStats] = useState<HostStats | null>(null)
   const [history, setHistory] = useState<{ stages: { label: string; display: string; ranks: { id: string; name: string; rank: number; total_points: number }[] }[]; current: { id: string; name: string; rank: number; total_points: number }[] } | null>(null)
-  const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null }>>({})
+  const [teamForm, setTeamForm] = useState<Record<string, { results: Array<'W' | 'D' | 'L'>; qualifiedAtIndex: number | null; qualifiedIndices?: number[] }>>({})
   const [breakdown, setBreakdown] = useState<{ periods: string[]; players: BreakdownPlayer[] } | null>(null)
 
   useEffect(() => {
@@ -407,7 +408,7 @@ export default function RankingPage() {
               ))}
               <span className="flex items-center gap-1.5 text-[11px] text-white/40">
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'radial-gradient(circle, #4ACA6A 55%, #F5C518 55%)', display: 'inline-block', flexShrink: 0 }} />
-                Qualified
+                Advanced
               </span>
             </div>
           )}
