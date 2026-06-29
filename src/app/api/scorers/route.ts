@@ -16,6 +16,20 @@ const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
   QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'Final',
 }
 
+// Period labels for the by-gameweek breakdown
+const STAGE_SEQUENCE_FOR_PERIODS = [
+  'GROUP_STAGE_MD2', 'GROUP_STAGE_MD3', 'ROUND_OF_32',
+  'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
+]
+const PERIOD_LABEL_BEFORE: Record<string, string> = {
+  GROUP_STAGE_MD2: 'MD1', GROUP_STAGE_MD3: 'MD2', ROUND_OF_32: 'MD3',
+  ROUND_OF_16: 'R32', QUARTER_FINALS: 'R16', SEMI_FINALS: 'QF', FINAL: 'SF',
+}
+const PERIOD_LABEL_AFTER: Record<string, string> = {
+  GROUP_STAGE_MD2: 'MD2+', GROUP_STAGE_MD3: 'MD3+', ROUND_OF_32: 'R32+',
+  ROUND_OF_16: 'R16+', QUARTER_FINALS: 'QF+', SEMI_FINALS: 'SF+', FINAL: 'Final',
+}
+
 function norm(s: string) {
   return s.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
@@ -25,10 +39,8 @@ function lookupGoals(pickName: string, goalsMap: Map<string, number>): { goals: 
   const pLast = pn.split(/\s+/).at(-1) ?? ''
   let bestMatch: { goals: number; matched: boolean } | null = null
 
-  // Direct match first
   if (goalsMap.has(pn)) bestMatch = { goals: goalsMap.get(pn)!, matched: true }
 
-  // Fuzzy: last-name or substring — keep highest goal count found
   for (const [fdNorm, goals] of goalsMap) {
     const fdLast = fdNorm.split(/\s+/).at(-1) ?? ''
     const matches =
@@ -42,7 +54,6 @@ function lookupGoals(pickName: string, goalsMap: Map<string, number>): { goals: 
   return bestMatch ?? { goals: 0, matched: false }
 }
 
-// Build goals map from a scorer_snapshot row array
 function buildGoalsMap(rows: Array<{ scorer_name: string; goals: number }>): Map<string, number> {
   const map = new Map<string, number>()
   for (const row of rows) map.set(norm(row.scorer_name), row.goals)
@@ -54,7 +65,6 @@ export async function GET() {
 
   const supabase = createServerClient()
 
-  // Fetch everything in parallel
   const [topScorersRes, picksRes, snapshotsRes, squadMapRes] = await Promise.all([
     FD_KEY
       ? fetch(`${FD_BASE}/competitions/WC/scorers?limit=200`, {
@@ -75,7 +85,6 @@ export async function GET() {
       : Promise.resolve(new Map<string, string[]>()),
   ])
 
-  // Build top scorers list
   const topScorers = ((topScorersRes.scorers ?? []) as Array<{
     player?: { name?: string }; team?: { name?: string }; goals?: number; assists?: number; penalties?: number
   }>).map(s => ({
@@ -86,35 +95,117 @@ export async function GET() {
     penalties: s.penalties ?? 0,
   }))
 
-  // Current cumulative goals map (live total from FD)
   const currentGoals = new Map<string, number>()
   for (const s of topScorers) currentGoals.set(norm(s.name), s.goals)
 
-  // Snapshot goals maps by stage
   const snapshots = snapshotsRes.data ?? []
   const snapshotsByStage = new Map<string, Map<string, number>>()
-  for (const stage of ['GROUP_STAGE_MD2', 'GROUP_STAGE_MD3', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']) {
+  for (const stage of STAGE_SEQUENCE_FOR_PERIODS) {
     const rows = snapshots.filter(s => s.effective_stage === stage)
     if (rows.length > 0) snapshotsByStage.set(stage, buildGoalsMap(rows))
   }
+
+  const availableSnaps = STAGE_SEQUENCE_FOR_PERIODS.filter(s => snapshotsByStage.has(s))
+
+  // Period labels for the by-gameweek table: ['MD1', 'MD2', 'MD3+'] when 2 snapshots available
+  const periods: string[] = availableSnaps.length === 0
+    ? []
+    : [
+        ...availableSnaps.map(s => PERIOD_LABEL_BEFORE[s]),
+        PERIOD_LABEL_AFTER[availableSnaps[availableSnaps.length - 1]],
+      ]
 
   const squadMap = squadMapRes as Map<string, string[]>
   const picks = picksRes.data ?? []
   const now = new Date()
 
-  // Get the snapshot map for the stage just before a given effective stage.
-  // Goals scored BEFORE effectiveStage = snapshot at that boundary.
-  // Goals scored FROM effectiveStage = current - snapshot at that boundary.
   function goalsBeforeStage(scorerName: string, stage: string): number {
     const snap = snapshotsByStage.get(stage)
     if (!snap) return 0
     return lookupGoals(scorerName, snap).goals
   }
 
+  // Compute an array of goals per period for a single scorer name
+  function scorerPeriodGoals(scorerName: string): number[] {
+    if (availableSnaps.length === 0) return []
+    const result: number[] = []
+    let prev = 0
+    for (const snap of availableSnaps) {
+      const at = goalsBeforeStage(scorerName, snap)
+      result.push(Math.max(0, at - prev))
+      prev = at
+    }
+    result.push(Math.max(0, lookupGoals(scorerName, currentGoals).goals - prev))
+    return result
+  }
+
+  // Compute aggregated goals per period for a quiniela player, respecting wildcard splits.
+  // When effectiveStage is not yet snapshotted, uses the last available snapshot as an approximation.
+  function playerPeriodGoals(p: typeof picks[0], isWcPending: boolean): number[] {
+    if (availableSnaps.length === 0) return []
+    const numPeriods = availableSnaps.length + 1
+    const totals = Array<number>(numPeriods).fill(0)
+
+    if (isWcPending) {
+      // Pending wildcard: show old scorers across all periods (new picks are hidden)
+      const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+      for (const name of oldNames) {
+        scorerPeriodGoals(name).forEach((g, i) => { totals[i] += g })
+      }
+      return totals
+    }
+
+    const effectiveStage = p.wildcard_effective_from as string | null
+    const hasWildcard = p.wildcard_used && effectiveStage
+
+    if (!hasWildcard) {
+      const names = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+      for (const name of names) {
+        scorerPeriodGoals(name).forEach((g, i) => { totals[i] += g })
+      }
+      return totals
+    }
+
+    const effectiveSnapIdx = availableSnaps.indexOf(effectiveStage)
+    const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
+    const newNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
+    const newNamesNorm = new Set(newNames.map(norm))
+    const oldNamesNorm = new Set(oldNames.map(norm))
+
+    // Kept scorers (in both old and new lists): count all periods
+    for (const name of newNames.filter(n => oldNamesNorm.has(norm(n)))) {
+      scorerPeriodGoals(name).forEach((g, i) => { totals[i] += g })
+    }
+
+    // Removed scorers: count only periods before the effective split
+    for (const name of oldNames.filter(n => !newNamesNorm.has(norm(n)))) {
+      const pg = scorerPeriodGoals(name)
+      for (let i = 0; i < numPeriods; i++) {
+        // effectiveSnapIdx < 0 means effective stage not yet snapshotted
+        // — approximate by counting all snapshot periods except the live final period
+        if (effectiveSnapIdx < 0 ? i < numPeriods - 1 : i <= effectiveSnapIdx) {
+          totals[i] += pg[i]
+        }
+      }
+    }
+
+    // Added scorers: count only periods from the effective split onwards
+    for (const name of newNames.filter(n => !oldNamesNorm.has(norm(n)))) {
+      const pg = scorerPeriodGoals(name)
+      for (let i = 0; i < numPeriods; i++) {
+        // effectiveSnapIdx < 0: approximate by counting only the live final period
+        if (effectiveSnapIdx < 0 ? i === numPeriods - 1 : i >= effectiveSnapIdx + 1) {
+          totals[i] += pg[i]
+        }
+      }
+    }
+
+    return totals
+  }
+
   const quinielaScorers = picks
     .filter(p => p.scorer1 || p.scorer2 || p.scorer3 || p.wildcard_old_scorer1)
     .map(p => {
-      // Same pending logic as ranking
       const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
         const d = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
         return d ? now < d.deadline : false
@@ -135,24 +226,20 @@ export async function GET() {
       let scorerPicks: Array<{ name: string; goals: number; matched: boolean; valid: boolean; old: boolean; subIn: boolean; wcLabel?: string }>
 
       if (isWcPending) {
-        // Hide new scorers — show old lineup only with current goals
         const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
         scorerPicks = oldNames.map(name => toScorerRow(name, lookupGoals(name, currentGoals).goals, false))
       } else if (hasOldScorers && effectiveStage) {
-        // Wildcard active — split goals at the effective stage boundary
         const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
         const newNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
         const newNamesNorm = new Set(newNames.map(norm))
 
-        // Old scorers: goals scored BEFORE the split (from snapshot)
         const oldPills = oldNames
-          .filter(name => !newNamesNorm.has(norm(name))) // exclude kept scorers (handled as new)
+          .filter(name => !newNamesNorm.has(norm(name)))
           .map(name => {
             const goals = goalsBeforeStage(name, effectiveStage)
             return toScorerRow(name, goals, true)
           })
 
-        // New scorers: goals scored FROM the split onwards (current - snapshot)
         const oldNamesNorm = new Set(oldNames.map(norm))
         const newPills = newNames.map(name => {
           const total = lookupGoals(name, currentGoals).goals
@@ -166,20 +253,23 @@ export async function GET() {
 
         scorerPicks = [...newPills, ...oldPills]
       } else {
-        // No wildcard — use current cumulative goals
         const names = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
         scorerPicks = names.map(name => toScorerRow(name, lookupGoals(name, currentGoals).goals, false))
       }
 
+      const total = scorerPicks.reduce((s, x) => s + x.goals, 0)
+      const goalsByPeriod = playerPeriodGoals(p, isWcPending)
+
       return {
         playerName: p.name,
         picks: scorerPicks,
-        total: scorerPicks.reduce((s, x) => s + x.goals, 0),
+        total,
+        goalsByPeriod,
         wildcardPending: isWcPending,
         wcLabel,
       }
     })
     .sort((a, b) => b.total - a.total)
 
-  return NextResponse.json({ tournamentStarted, topScorers, quinielaScorers })
+  return NextResponse.json({ tournamentStarted, topScorers, quinielaScorers, periods })
 }
