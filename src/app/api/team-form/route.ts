@@ -145,8 +145,8 @@ export async function GET() {
       // Knockout wins
       sorted.forEach((e, i) => { if (e.knockout && e.won) qualifiedIndices.add(i) })
 
-      // Group stage qualification (only if no knockout wins yet, i.e. still in group stage)
-      if (qualifiedIndices.size === 0 && qualifiedTeams.has(team)) {
+      // Group stage qualification — always add alongside any knockout rings
+      if (qualifiedTeams.has(team)) {
         let cumPts = 0
         let found = false
         for (let i = 0; i < sorted.length; i++) {

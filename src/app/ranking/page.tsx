@@ -69,9 +69,9 @@ function FormDots({ form }: { form?: { results: Array<'W' | 'D' | 'L'>; qualifie
         return (
           <span key={i} title={isGold ? 'Advanced!' : r === 'W' ? 'Win' : r === 'D' ? 'Draw' : 'Loss'}
             style={{
-              width: 7, height: 7, borderRadius: '50%',
+              width: isGold ? 9 : 7, height: isGold ? 9 : 7, borderRadius: '50%',
               background: isGold
-                ? `radial-gradient(circle, ${colors[r]} 55%, #F5C518 55%)`
+                ? `radial-gradient(circle, #F5C518 42%, ${colors[r]} 42%)`
                 : colors[r],
               display: 'inline-block', flexShrink: 0,
             }} />
@@ -409,7 +409,7 @@ export default function RankingPage() {
                 </span>
               ))}
               <span className="flex items-center gap-1.5 text-[11px] text-white/40">
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'radial-gradient(circle, #4ACA6A 55%, #F5C518 55%)', display: 'inline-block', flexShrink: 0 }} />
+                <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'radial-gradient(circle, #F5C518 42%, #4ACA6A 42%)', display: 'inline-block', flexShrink: 0 }} />
                 Advanced
               </span>
             </div>
