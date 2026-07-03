@@ -15,7 +15,7 @@ const CHANGELOG = [
     changes: [
       'Added knockout round scoring rules: ET counts as part of the match result, penalties are treated as a draw for match points',
       'Clarified that the advancing team in a penalty shootout earns the Round Advanced bonus',
-      'Round Advanced bonus is awarded when a team plays in R16 or later (not for R32)',
+      'Round Advanced bonus is awarded for group qualification and for each advancement: win R32, win R16, win QF, win SF, and for playing in the Final or 3rd place match',
     ],
   },
   {
@@ -173,7 +173,16 @@ export default function RulesPage() {
                 <strong className="text-white">Penalty shootouts count as a Draw for match points.</strong> Both teams earn Draw points — because regulation + extra time ended level. The team that wins on penalties earns the <strong className="text-white">Round Advanced</strong> bonus.
               </Rule>
               <Rule>
-                <strong className="text-white">Round Advanced bonus triggers from R16 onwards.</strong> It is awarded for each round a team plays in from R16 through the Final — not for R32. So a team reaching the Final earns it 4 times.
+                <strong className="text-white">Round Advanced bonus is earned each time your team advances:</strong>
+                <ul className="mt-1 space-y-0.5 pl-3 text-white/60">
+                  <li>• Qualifying from the group stage</li>
+                  <li>• Winning R32 → advancing to R16</li>
+                  <li>• Winning R16 → advancing to Quarter Finals</li>
+                  <li>• Winning QF → advancing to Semi Finals</li>
+                  <li>• Winning SF → advancing to Final or 3rd place match</li>
+                  <li>• Playing in the Final or 3rd place match (both teams earn it)</li>
+                </ul>
+                <span className="text-white/50 text-[11px]">A team that reaches the Final earns this bonus 6 times. A team eliminated in R32 earns it once (group stage only).</span>
               </Rule>
               <Rule>
                 <strong className="text-white">Champion bonus (+500)</strong> is awarded on top of all other Final bonuses for the winning team.

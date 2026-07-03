@@ -58,7 +58,7 @@ ADMIN_PASSWORD=quiniela2026
 **Knockout scoring rules:**
 - Extra time counts as part of the match (W/L if decided in ET using `score.extraTime`)
 - Penalties = Draw result for both teams. Winner on pens gets the **Round Advanced** bonus.
-- Round Advanced triggers from R16 onwards (not R32). Teams earn it per round they play in from R16 to Final.
+- Round Advanced is earned once per knockout round played, starting from R16. Winning R32 immediately earns the R16 entry bonus (awarded proactively). A team reaching the Final earns it 4 times total.
 
 Implemented in `src/lib/scoring.ts` → `calculatePickPoints(pick, matches)`.
 
