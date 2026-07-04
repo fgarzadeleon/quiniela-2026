@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "dotenv -e .env.local -- tsx scripts/seed-picks.ts",
-    "sim": "dotenv -e .env.local -- tsx scripts/simulate.ts"
+    "sim": "dotenv -e .env.local -- tsx scripts/simulate.ts",
+    "test:breakdown": "tsx scripts/test-points-breakdown.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.1",
