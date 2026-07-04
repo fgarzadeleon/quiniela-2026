@@ -283,9 +283,10 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       }
 
       total += pts
+      // Swapped-out old teams go to byOldTeam; kept teams and current teams go to byTeam.
       if (usingOldTeams && byOldTeam.has(teamName)) {
         byOldTeam.set(teamName, (byOldTeam.get(teamName) ?? 0) + pts)
-      } else if (!usingOldTeams && byTeam.has(teamName)) {
+      } else if (byTeam.has(teamName)) {
         byTeam.set(teamName, (byTeam.get(teamName) ?? 0) + pts)
       }
     }
@@ -294,7 +295,8 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
     if (stage === 'GROUP_STAGE' && !isGroupStageWildcard) {
       for (const teamName of teams) {
         if (!groupQualifiers.has(teamName)) continue
-        const targetMap = usingOldTeams ? byOldTeam : byTeam
+        // Swapped-out old teams → byOldTeam; kept/current teams → byTeam
+        const targetMap = (usingOldTeams && byOldTeam.has(teamName)) ? byOldTeam : byTeam
         addGroupAdvancementBonus(teamName, targetMap)
       }
     }
