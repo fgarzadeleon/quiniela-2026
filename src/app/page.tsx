@@ -3,13 +3,14 @@ import CountdownTimer from '@/components/CountdownTimer'
 import Flag from '@/components/Flag'
 import HomeWidgets from '@/components/HomeWidgets'
 import { TEAMS } from '@/lib/teams'
+import { getEliminatedTeamNames } from '@/lib/team-status'
 import { Tier } from '@/types'
 
-const TIER_COLORS: Record<Tier, { bg: string; border: string }> = {
-  A: { bg: '#1A0A0A', border: '#D72638' },
-  B: { bg: '#0A0E1A', border: '#2A4AB0' },
-  C: { bg: '#0A1A0A', border: '#1A6A2A' },
-  D: { bg: '#1A1400', border: '#7A5A00' },
+const TIER_COLORS: Record<Tier, { bg: string; border: string; label: string }> = {
+  A: { bg: '#1A0A0A', border: '#D72638', label: '#D72638' },
+  B: { bg: '#0A0E1A', border: '#2A4AB0', label: '#6A90F0' },
+  C: { bg: '#0A1A0A', border: '#1A6A2A', label: '#4ACA6A' },
+  D: { bg: '#1A1400', border: '#7A5A00', label: '#D4A017' },
 }
 
 
@@ -25,8 +26,10 @@ function ScoringRow({ label, a, b, c, d }: { label: string; a: string; b: string
   )
 }
 
-export default function HomePage() {
-  const topTeams = TEAMS.slice(0, 12)
+export default async function HomePage() {
+  const eliminated = await getEliminatedTeamNames()
+  const remaining = TEAMS.filter(t => !eliminated.has(t.name))
+  const tiers: Tier[] = ['A', 'B', 'C', 'D']
 
   return (
     <div>
@@ -175,35 +178,51 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Team preview */}
+      {/* Still in it */}
       <section className="max-w-5xl mx-auto px-4 py-16">
         <h2
           style={{ fontFamily: 'Impact, sans-serif', fontSize: 'clamp(1.5rem, 4vw, 2.5rem)', letterSpacing: '0.05em' }}
-          className="text-center mb-2"
+          className="text-center mb-1"
         >
-          THE FIELD
+          STILL IN IT
         </h2>
-        <p className="text-center text-white/40 text-sm mb-8">48 teams · odds-based point costs</p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          {topTeams.map(t => (
-            <div
-              key={t.name}
-              style={{ background: TIER_COLORS[t.tier].bg, border: `1px solid ${TIER_COLORS[t.tier].border}` }}
-              className="rounded-lg p-3 flex items-center gap-2"
-            >
-              <Flag code={t.code} name={t.name} size={24} />
-              <div className="min-w-0">
-                <p className="text-white text-sm font-medium truncate">{t.name}</p>
-                <p className="text-white/40 text-xs">{t.cost} pts · Tier {t.tier}</p>
+        <p className="text-center text-white/40 text-sm mb-10">
+          {remaining.length} of 48 teams remaining · sorted by cost
+        </p>
+
+        {tiers.map(tier => {
+          const tierTeams = remaining.filter(t => t.tier === tier)
+          if (tierTeams.length === 0) return null
+          const colors = TIER_COLORS[tier]
+          return (
+            <div key={tier} className="mb-8">
+              <div className="flex items-center gap-3 mb-3">
+                <span
+                  className="text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+                  style={{ background: `${colors.border}22`, border: `1px solid ${colors.border}`, color: colors.label }}
+                >
+                  Tier {tier}
+                </span>
+                <span className="text-white/30 text-xs">{tierTeams.length} team{tierTeams.length !== 1 ? 's' : ''}</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {tierTeams.map(t => (
+                  <div
+                    key={t.name}
+                    style={{ background: colors.bg, border: `1px solid ${colors.border}` }}
+                    className="rounded-lg p-3 flex items-center gap-2"
+                  >
+                    <Flag code={t.code} name={t.name} size={24} />
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{t.name}</p>
+                      <p className="text-xs" style={{ color: colors.label }}>{t.cost} pts</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-        <div className="text-center mt-6">
-          <Link href="/picks" className="text-[#F5C518] hover:underline text-sm">
-            View all 48 teams →
-          </Link>
-        </div>
+          )
+        })}
       </section>
     </div>
   )
