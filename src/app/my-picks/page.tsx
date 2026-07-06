@@ -32,6 +32,9 @@ interface PickData {
   name: string
   team1: string; team2: string; team3: string; team4: string; team5: string
   scorer1?: string; scorer2?: string; scorer3?: string
+  wildcard_old_team1?: string | null; wildcard_old_team2?: string | null
+  wildcard_old_team3?: string | null; wildcard_old_team4?: string | null
+  wildcard_old_team5?: string | null
   wildcard_old_scorer1?: string | null
   wildcard_old_scorer2?: string | null
   wildcard_old_scorer3?: string | null
@@ -214,9 +217,22 @@ export default function MyPicksPage() {
   const wcNow = new Date()
   const wcNext = getNextWildcardDeadline(wcNow)
 
+  // Wildcard is modifiable if it's been used but the effective-from deadline hasn't closed yet
+  const isWildcardModifiable = !!(
+    pick?.wildcard_used &&
+    pick.wildcard_effective_from &&
+    WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from && wcNow < d.deadline)
+  )
+
   const currentTeams = pick
     ? [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5].map(n => TEAM_MAP.get(n)!)
     : []
+
+  // For wildcard modify: original teams are the pre-wildcard lineup
+  const originalTeams = pick?.wildcard_used
+    ? [pick.wildcard_old_team1, pick.wildcard_old_team2, pick.wildcard_old_team3, pick.wildcard_old_team4, pick.wildcard_old_team5]
+        .filter(Boolean).map(n => TEAM_MAP.get(n!)!).filter(Boolean)
+    : currentTeams
 
   const keptTeamObjs = keepTeams.map(n => TEAM_MAP.get(n)!)
   const newPickObjs = newPicks.map(n => TEAM_MAP.get(n)!)
@@ -409,14 +425,53 @@ export default function MyPicksPage() {
           </div>
         ) : pick.wildcard_used ? (
           // Post-deadline, wildcard spent
+          (() => {
+            const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from)
+            return (
           <div
-            className="rounded-xl p-5 text-center"
-            style={{ background: 'rgba(245,197,24,0.05)', border: '1px solid rgba(245,197,24,0.2)' }}
+            className="rounded-xl p-5"
+            style={{ background: isWildcardModifiable ? 'rgba(74,202,106,0.05)' : 'rgba(245,197,24,0.05)', border: `1px solid ${isWildcardModifiable ? 'rgba(74,202,106,0.25)' : 'rgba(245,197,24,0.2)'}` }}
           >
-            <p className="text-2xl mb-2">🃏</p>
-            <p className="text-[#F5C518] font-bold">Wildcard used</p>
-            <p className="text-white/40 text-sm mt-1">Your wildcard has been used. Good luck!</p>
+            <div className="text-center mb-3">
+              <p className="text-2xl mb-1">🃏</p>
+              <p className="font-bold" style={{ color: isWildcardModifiable ? '#4ACA6A' : '#F5C518' }}>
+                {isWildcardModifiable ? 'Wildcard active — modifications open' : 'Wildcard locked'}
+              </p>
+              {isWildcardModifiable && wdEntry && (
+                <p className="text-[#4ACA6A]/70 text-xs mt-0.5 font-medium">
+                  Modify window closes {fmtDate(wdEntry.deadline)} · {wdEntry.label}
+                </p>
+              )}
+              {!isWildcardModifiable && wdEntry && (
+                <p className="text-white/40 text-xs mt-1">
+                  Modification window closed {fmtDate(wdEntry.deadline)} · picks are final
+                </p>
+              )}
+              {!isWildcardModifiable && !wdEntry && (
+                <p className="text-white/40 text-xs mt-1">Picks are final. Good luck!</p>
+              )}
+            </div>
+            {isWildcardModifiable && (
+              <button
+                onClick={() => {
+                  setError('')
+                  // Pre-populate with current wildcard state using original teams as base
+                  const currNew = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
+                  const origNames = [pick.wildcard_old_team1, pick.wildcard_old_team2, pick.wildcard_old_team3, pick.wildcard_old_team4, pick.wildcard_old_team5].filter(Boolean) as string[]
+                  setKeepTeams(currNew.filter(t => origNames.includes(t)))
+                  setNewPicks(currNew.filter(t => !origNames.includes(t)))
+                  setWildcardScorers([pick.scorer1 ?? '', pick.scorer2 ?? '', pick.scorer3 ?? ''])
+                  setStage('wildcard')
+                }}
+                className="w-full py-3 rounded-xl font-bold text-sm uppercase tracking-widest cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #0A3A1A, #0A2A1A)', border: '1px solid rgba(74,202,106,0.4)', color: '#4ACA6A', fontFamily: 'Impact, sans-serif' }}
+              >
+                ✏️ Modify Wildcard
+              </button>
+            )}
           </div>
+            )
+          })()
         ) : (
           // Post-deadline, wildcard available
           <div
@@ -657,8 +712,14 @@ export default function MyPicksPage() {
       <div className="max-w-4xl mx-auto px-4 py-10">
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">🐚</div>
-          <h1 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.8rem', color: '#F5C518' }}>WILDCARD</h1>
-          <p className="text-white/50 text-sm mt-2">Lock 2–4 teams to keep, then pick the replacements.</p>
+          <h1 style={{ fontFamily: 'Impact, sans-serif', fontSize: '1.8rem', color: '#F5C518' }}>
+            {isWildcardModifiable ? 'MODIFY WILDCARD' : 'WILDCARD'}
+          </h1>
+          <p className="text-white/50 text-sm mt-2">
+            {isWildcardModifiable
+              ? 'Change which teams you keep and swap — deadline not yet closed.'
+              : 'Lock 2–4 teams to keep, then pick the replacements.'}
+          </p>
           {wcNext && (
             <div className="mt-4 inline-block rounded-lg px-4 py-2.5 text-center" style={{ background: 'rgba(245,197,24,0.08)', border: '1px solid rgba(245,197,24,0.25)' }}>
               <p className="text-[#F5C518] text-sm font-bold">
@@ -677,8 +738,9 @@ export default function MyPicksPage() {
           <p className="text-white/60 text-sm uppercase tracking-wider mb-3">
             Step 1 — Lock 2–4 teams to keep <span className="text-white/30">({keepTeams.length} locked)</span>
           </p>
+          {isWildcardModifiable && <p className="text-white/40 text-xs mb-3">Choosing from your original lineup before the wildcard.</p>}
           <div className="space-y-2">
-            {currentTeams.map(t => {
+            {(isWildcardModifiable ? originalTeams : currentTeams).map(t => {
               const locked = keepTeams.includes(t.name)
               const disabledKeep = !locked && keepTeams.length >= 4
               const colors = TIER_COLORS[t.tier]
@@ -848,7 +910,9 @@ export default function MyPicksPage() {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <div className="text-6xl mb-4">🐚</div>
-        <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '2rem', color: '#F5C518' }}>Wildcard Used!</h2>
+        <h2 style={{ fontFamily: 'Impact, sans-serif', fontSize: '2rem', color: '#F5C518' }}>
+          {isWildcardModifiable ? 'Wildcard Updated!' : 'Wildcard Used!'}
+        </h2>
         <p className="text-white/50 mt-2 mb-8">Your picks have been updated. Good luck, {pick.name}!</p>
         <div className="flex flex-wrap justify-center gap-2">
           {newTeams.map(t => (

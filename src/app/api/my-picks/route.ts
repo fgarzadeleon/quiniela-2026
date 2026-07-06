@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-import { getCurrentRound, getNextRound, getNextWildcardDeadline } from '@/lib/scoring'
+import { getCurrentRound, getNextRound, getNextWildcardDeadline, WILDCARD_DEADLINES } from '@/lib/scoring'
 import { fetchSquadMap, invalidScorers } from '@/lib/squad-validation'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
-const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_effective_from, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3, total_cost, total_points, created_at, updated_at'
+const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_effective_from, wildcard_old_team1, wildcard_old_team2, wildcard_old_team3, wildcard_old_team4, wildcard_old_team5, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3, total_cost, total_points, created_at, updated_at'
 
 function sortedKey(teams: string[]) {
   return [...teams].sort().join('|')
@@ -134,8 +134,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Picks are locked — tournament has started' }, { status: 403 })
   }
 
-  if (pick.wildcard_used) {
-    return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
+  const isModify = pick.wildcard_used
+  if (isModify) {
+    const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from)
+    if (!wdEntry || new Date() >= wdEntry.deadline) {
+      return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
+    }
   }
 
   const { keepTeams, newTeams: newTeamsBody, scorer1, scorer2, scorer3 } = body
@@ -146,7 +150,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Must keep 2–4 teams with a total of 5 teams' }, { status: 400 })
   }
 
-  const originalTeams = [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
+  // Kept teams must come from the pre-wildcard original lineup
+  const originalTeams = isModify
+    ? [pick.wildcard_old_team1, pick.wildcard_old_team2, pick.wildcard_old_team3, pick.wildcard_old_team4, pick.wildcard_old_team5].filter(Boolean) as string[]
+    : [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
   if (!keepList.every(t => originalTeams.includes(t))) {
     return NextResponse.json({ error: 'Kept teams must be from your original picks' }, { status: 400 })
   }
@@ -205,27 +212,46 @@ export async function PATCH(req: NextRequest) {
   const nextDeadline = getNextWildcardDeadline(now)
   const wildcardEffectiveFrom = nextDeadline?.effectiveStage ?? (getNextRound(getCurrentRound(now)) ?? getCurrentRound(now))
 
+  const updatePayload: Record<string, unknown> = {
+    team1: allFive[0], team2: allFive[1], team3: allFive[2],
+    team4: allFive[3], team5: allFive[4],
+    total_cost: cost,
+    wildcard_used: true,
+    wildcard_used_at: now.toISOString(),
+    scorer1: scorer1 || null,
+    scorer2: scorer2 || null,
+    scorer3: scorer3 || null,
+  }
+  if (!isModify) {
+    // Only set these fields on first use — modifications keep the originals
+    updatePayload.wildcard_effective_from = wildcardEffectiveFrom
+    updatePayload.wildcard_old_team1 = originalTeams[0]
+    updatePayload.wildcard_old_team2 = originalTeams[1]
+    updatePayload.wildcard_old_team3 = originalTeams[2]
+    updatePayload.wildcard_old_team4 = originalTeams[3]
+    updatePayload.wildcard_old_team5 = originalTeams[4]
+    updatePayload.wildcard_old_scorer1 = pick.scorer1 || null
+    updatePayload.wildcard_old_scorer2 = pick.scorer2 || null
+    updatePayload.wildcard_old_scorer3 = pick.scorer3 || null
+  }
+
+  // Log the event before writing — gives a recovery snapshot if anything goes wrong
+  await supabase.from('pick_events').insert({
+    pick_id: pick.id,
+    player_name: pick.name,
+    event_type: isModify ? 'wildcard_modified' : 'wildcard_used',
+    old_team1: pick.team1, old_team2: pick.team2, old_team3: pick.team3,
+    old_team4: pick.team4, old_team5: pick.team5,
+    old_scorer1: pick.scorer1 || null, old_scorer2: pick.scorer2 || null, old_scorer3: pick.scorer3 || null,
+    new_team1: allFive[0], new_team2: allFive[1], new_team3: allFive[2],
+    new_team4: allFive[3], new_team5: allFive[4],
+    new_scorer1: scorer1 || null, new_scorer2: scorer2 || null, new_scorer3: scorer3 || null,
+    effective_from: isModify ? pick.wildcard_effective_from : wildcardEffectiveFrom,
+  })
+
   const { data: updated, error: updateErr } = await supabase
     .from('picks')
-    .update({
-      team1: allFive[0], team2: allFive[1], team3: allFive[2],
-      team4: allFive[3], team5: allFive[4],
-      total_cost: cost,
-      wildcard_used: true,
-      wildcard_used_at: now.toISOString(),
-      wildcard_effective_from: wildcardEffectiveFrom,
-      wildcard_old_team1: originalTeams[0],
-      wildcard_old_team2: originalTeams[1],
-      wildcard_old_team3: originalTeams[2],
-      wildcard_old_team4: originalTeams[3],
-      wildcard_old_team5: originalTeams[4],
-      wildcard_old_scorer1: pick.scorer1 || null,
-      wildcard_old_scorer2: pick.scorer2 || null,
-      wildcard_old_scorer3: pick.scorer3 || null,
-      scorer1: scorer1 || null,
-      scorer2: scorer2 || null,
-      scorer3: scorer3 || null,
-    })
+    .update(updatePayload)
     .eq('id', pick.id)
     .select(SAFE_FIELDS)
     .single()
