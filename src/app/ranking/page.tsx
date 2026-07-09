@@ -45,6 +45,7 @@ interface RankedPick {
   total_points: number
   wildcard_used?: boolean
   host_bonus?: number
+  host_breakdown?: { key: string; predicted: string | null; answer: string | null; correct: boolean }[]
   position_change?: number | null
 }
 
@@ -510,6 +511,33 @@ export default function RankingPage() {
                       </div>
                     ) : null}
                   </div>
+
+                  {(p.host_breakdown?.length ?? 0) > 0 && (
+                    <div className="w-full mt-2 flex flex-wrap gap-1.5">
+                      {(() => {
+                        const LABELS: Record<string, string> = { dirtiest: 'DR', best: 'BE', worst: 'WO', most_goals_for: 'GF', most_goals_against: 'GA' }
+                        const HOST_CODES: Record<string, string> = { USA: 'us', Mexico: 'mx', Canada: 'ca' }
+                        return p.host_breakdown!.map(h => (
+                          <span
+                            key={h.key}
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-mono"
+                            style={{
+                              background: h.correct ? 'rgba(74,202,106,0.1)' : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${h.correct ? 'rgba(74,202,106,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                              color: h.correct ? '#4ACA6A' : 'rgba(255,255,255,0.35)',
+                            }}
+                          >
+                            <span className="opacity-60">{LABELS[h.key]}:</span>
+                            {h.predicted && HOST_CODES[h.predicted]
+                              ? <Flag code={HOST_CODES[h.predicted]} name={h.predicted} size={12} />
+                              : <span>—</span>
+                            }
+                            <span>{h.correct ? '✅' : '❌'}</span>
+                          </span>
+                        ))
+                      })()}
+                    </div>
+                  )}
 
                   <div className="text-right text-xs text-white/30 hidden sm:block">
                     <div>{p.total_cost} pts</div>

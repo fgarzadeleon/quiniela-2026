@@ -236,6 +236,14 @@ export async function GET() {
       const host_bonus = pred
         ? KEYS.reduce((sum, k) => sum + (answers[k] && pred[k] === answers[k] ? 100 : 0), 0)
         : 0
+      const host_breakdown = pred
+        ? KEYS.filter(k => answers[k] != null).map(k => ({
+            key: k,
+            predicted: pred[k] ?? null,
+            answer: answers[k],
+            correct: answers[k] != null && pred[k] === answers[k],
+          }))
+        : []
       const matchPoints = calculatePickPoints(p, matches)
 
       // Wildcard is "pending" until the specific effective-stage deadline is reached.
@@ -278,6 +286,7 @@ export async function GET() {
       return {
         ...p,
         host_bonus,
+        host_breakdown,
         total_points: matchPoints + host_bonus,
         team_points,
         old_team_points,
