@@ -8,6 +8,12 @@ export const dynamic = 'force-dynamic'
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
 
+// Teams confirmed qualified after MD2 (6pts from 2 wins before the MD3 round began).
+// Used to verify group advance bonus lands in the MD2 column, not MD3.
+const MD2_EARLY_QUALIFIERS = new Set([
+  'Mexico', 'USA', 'Germany', 'France', 'Argentina', 'Norway', 'Colombia',
+])
+
 const STAGE_MAP: Record<string, Match['stage']> = {
   GROUP_STAGE:    'GROUP_STAGE',
   LAST_32:        'ROUND_OF_32',
@@ -171,24 +177,26 @@ export async function GET() {
         row.total_pts += amt
       }
 
-      // Group advance
+      // Group advance — place bonus in the matchday column where it was earned.
+      // Find the group result whose date matches earlyQualDate; fall back to GS_MD3.
       const qualDate = groupQualifiers.get(teamName)
       row.group_qualified = !!qualDate
       row.early_qual_date = qualDate ? qualDate.toISOString() : null
-      if (qualDate) addAdvance('GROUP_ADV', scoring.advanceRound)
-
-      // Match points already in total_pts from stage_pts, add them now
-      for (const sp of Object.values(row.stage_pts)) {
-        row.total_pts += sp.match_pts
+      if (qualDate) {
+        const qualMs = qualDate.getTime()
+        const qualResult = row.results
+          .filter(r => r.stage === 'GROUP_STAGE' && r.matchday != null)
+          .find(r => Math.abs(new Date(r.date).getTime() - qualMs) < 60_000)
+        const groupAdvKey = qualResult ? `GS_MD${qualResult.matchday}` : 'GS_MD3'
+        addAdvance(groupAdvKey, scoring.advanceRound)
       }
-      // Remove double-count (advance already added above in addAdvance)
-      // Actually I need to initialize total_pts from match_pts correctly
-      // Let me fix this: zero out total_pts and recompute
+
+      // Initialise total_pts from all stage_pts collected so far (match pts + group advance)
       row.total_pts = 0
       for (const sp of Object.values(row.stage_pts)) {
         row.total_pts += sp.match_pts + sp.advance_pts
       }
-      // Reset advance_rounds for the knockout calculation below
+      // Reset advance_rounds for the knockout calculation below (group advance already counted via addAdvance above)
       row.advance_rounds = qualDate ? 1 : 0
 
       // Knockout advance — mirrors computeTeamTable exactly

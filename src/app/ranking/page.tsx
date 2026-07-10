@@ -280,9 +280,9 @@ function TeamResultsTable() {
 
   const activeKo = KO_STAGES.filter(s => teams.some(t => t.results.some(r => r.stage === s)))
   // Columns: MD1, MD2, MD3, GS_ADV, then each active KO stage
-  const cols = ['GS_MD1', 'GS_MD2', 'GS_MD3', 'GROUP_ADV', ...activeKo]
+  const cols = ['GS_MD1', 'GS_MD2', 'GS_MD3', ...activeKo]
   const colLabel: Record<string, string> = {
-    GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3', GROUP_ADV: 'G.Adv', ...STAGE_SHORT,
+    GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3', ...STAGE_SHORT,
   }
 
   const q = filter.trim().toLowerCase()
@@ -371,7 +371,7 @@ function TeamResultsTable() {
                       {cols.map(col => {
                         const sp = t.stage_pts[col]
                         const m = matchForCol(col)
-                        const title = m ? `${m.result} ${m.gf}–${m.ga} vs ${m.opponent}` : col === 'GROUP_ADV' && t.group_qualified ? 'Group stage advance bonus' : ''
+                        const title = m ? `${m.result} ${m.gf}–${m.ga} vs ${m.opponent}` : ''
                         const bg = sp
                           ? sp.total > 0 ? 'rgba(74,202,106,0.08)' : sp.total < 0 ? 'rgba(215,38,56,0.08)' : 'transparent'
                           : 'transparent'
