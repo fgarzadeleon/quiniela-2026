@@ -280,6 +280,28 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
           const wonFinal = gf > ga || (gf === ga && finalMatch.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
           if (wonFinal) pts += scoring.champion
         }
+        // Proactive advance for R16/QF/SF winners when the next stage hasn't started yet —
+        // mirrors the R32 proactive logic to avoid a gap between rounds.
+        if (stage !== 'FINAL') {
+          const NEXT_STAGE: Partial<Record<string, string>> = {
+            ROUND_OF_16: 'QUARTER_FINALS',
+            QUARTER_FINALS: 'SEMI_FINALS',
+            SEMI_FINALS: 'FINAL',
+          }
+          const nextStage = NEXT_STAGE[stage]
+          if (nextStage) {
+            const hasNextStageForTeam = finishedMatches.some(m => m.stage === nextStage && (m.home_team === teamName || m.away_team === teamName))
+            if (!hasNextStageForTeam) {
+              const wonStage = teamMatches.some(m => {
+                const isHome = m.home_team === teamName
+                const gf = isHome ? m.home_score : m.away_score
+                const ga = isHome ? m.away_score : m.home_score
+                return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+              })
+              if (wonStage) pts += scoring.advanceRound
+            }
+          }
+        }
       }
 
       total += pts

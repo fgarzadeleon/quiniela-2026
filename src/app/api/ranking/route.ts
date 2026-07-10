@@ -127,6 +127,28 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
         }
       }
 
+      // Proactive advance for R16/QF/SF winners when the next stage hasn't started yet.
+      // Mirrors the R32 proactive logic: avoids leaving a gap between rounds where the
+      // advance point is owed but not yet awarded.
+      if (stage === 'ROUND_OF_16' || stage === 'QUARTER_FINALS' || stage === 'SEMI_FINALS') {
+        const NEXT_STAGE: Partial<Record<string, Match['stage']>> = {
+          ROUND_OF_16: 'QUARTER_FINALS',
+          QUARTER_FINALS: 'SEMI_FINALS',
+          SEMI_FINALS: 'FINAL',
+        }
+        const nextStage = NEXT_STAGE[stage]!
+        const hasNextStage = scoreable.some(m => m.stage === nextStage && (m.home_team === teamName || m.away_team === teamName))
+        if (!hasNextStage) {
+          const wonStage = stageMatches.some(m => {
+            const isHome = m.home_team === teamName
+            const mGf = isHome ? m.home_score : m.away_score
+            const mGa = isHome ? m.away_score : m.home_score
+            return mGf > mGa || (mGf === mGa && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          })
+          if (wonStage) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
+        }
+      }
+
       for (const m of stageMatches) {
         const isHome = m.home_team === teamName
         const goalsFor = isHome ? m.home_score : m.away_score
