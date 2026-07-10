@@ -259,18 +259,39 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
       // ROUND_OF_32: award R16 entry advance proactively for winners confirmed to play in R16.
       //   Only if no R16 matches exist yet (avoids double-count when R16 starts).
       // R16+: advanceRound means "you won your previous knockout match to get here"
+      // Helper: returns true if this team will be credited with the next stage's entry advance
+      // during normal stage processing (i.e., next stage has matches AND team appears in it).
+      // When false, we must award proactively — either because next stage hasn't happened yet,
+      // or because the team was swapped out via wildcard and won't be in the next stage's team list.
+      const NEXT_KO_STAGE: Partial<Record<string, string>> = {
+        ROUND_OF_32: 'ROUND_OF_16',
+        ROUND_OF_16: 'QUARTER_FINALS',
+        QUARTER_FINALS: 'SEMI_FINALS',
+        SEMI_FINALS: 'FINAL',
+      }
+      function willCreditAtNextStage(currentStage: string): boolean {
+        const next = NEXT_KO_STAGE[currentStage]
+        if (!next) return false
+        const hasNextMatches = finishedMatches.some(m => m.stage === next && (m.home_team === teamName || m.away_team === teamName))
+        return hasNextMatches && teamsForStage(next).includes(teamName)
+      }
+
+      function wonCurrentStage(): boolean {
+        return teamMatches.some(m => {
+          const isHome = m.home_team === teamName
+          const gf = isHome ? m.home_score : m.away_score
+          const ga = isHome ? m.away_score : m.home_score
+          return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+        })
+      }
+
       if (stage === 'ROUND_OF_32') {
-        const hasR16 = finishedMatches.some(m => m.stage === 'ROUND_OF_16' && (m.home_team === teamName || m.away_team === teamName))
-        if (!hasR16) {
-          const wonR32 = teamMatches.some(m => {
-            const isHome = m.home_team === teamName
-            const gf = isHome ? m.home_score : m.away_score
-            const ga = isHome ? m.away_score : m.home_score
-            return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
-          })
-          if (wonR32) pts += scoring.advanceRound
+        // Proactive R16 entry: give advance if team won R32 and won't be credited at R16 stage.
+        if (!willCreditAtNextStage('ROUND_OF_32')) {
+          if (wonCurrentStage()) pts += scoring.advanceRound
         }
       } else if (stage !== 'GROUP_STAGE') {
+        // Advance for reaching this knockout stage (= won the previous round).
         pts += scoring.advanceRound
         if (stage === 'FINAL') {
           const finalMatch = teamMatches[0]
@@ -279,27 +300,11 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
           const ga = isHome ? finalMatch.away_score : finalMatch.home_score
           const wonFinal = gf > ga || (gf === ga && finalMatch.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
           if (wonFinal) pts += scoring.champion
-        }
-        // Proactive advance for R16/QF/SF winners when the next stage hasn't started yet —
-        // mirrors the R32 proactive logic to avoid a gap between rounds.
-        if (stage !== 'FINAL') {
-          const NEXT_STAGE: Partial<Record<string, string>> = {
-            ROUND_OF_16: 'QUARTER_FINALS',
-            QUARTER_FINALS: 'SEMI_FINALS',
-            SEMI_FINALS: 'FINAL',
-          }
-          const nextStage = NEXT_STAGE[stage]
-          if (nextStage) {
-            const hasNextStageForTeam = finishedMatches.some(m => m.stage === nextStage && (m.home_team === teamName || m.away_team === teamName))
-            if (!hasNextStageForTeam) {
-              const wonStage = teamMatches.some(m => {
-                const isHome = m.home_team === teamName
-                const gf = isHome ? m.home_score : m.away_score
-                const ga = isHome ? m.away_score : m.home_score
-                return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
-              })
-              if (wonStage) pts += scoring.advanceRound
-            }
+        } else {
+          // Proactive advance for winning this stage when the team won't be credited at the next stage
+          // (next stage not yet in data, or team swapped out via wildcard before that stage).
+          if (!willCreditAtNextStage(stage)) {
+            if (wonCurrentStage()) pts += scoring.advanceRound
           }
         }
       }
