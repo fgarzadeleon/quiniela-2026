@@ -133,16 +133,18 @@ async function main() {
       old_sum  = oldBd.reduce((s, t) => s + t.points, 0)
     }
 
-    const expected = team_sum + old_sum + host_bonus
+    // Invariant: calculatePickPoints (match/advance pts only) == sum of pills (team + old).
+    // host_bonus is separate and additive — both total and expected include it, so it cancels.
+    const expected = team_sum + old_sum
     const gap      = total - expected
 
     if (gap !== 0) {
       failures++
-      console.error(`FAIL  ${pick.name.padEnd(30)} total=${total}  pills=${team_sum}+${old_sum}  host=${host_bonus}  GAP=${gap}`)
+      console.error(`FAIL  ${pick.name.padEnd(30)} calcPts=${total}  pills=${team_sum}+${old_sum}  host=${host_bonus}  GAP=${gap}`)
       const bd = calculatePickPointsBreakdown(pick, matches)
       for (const t of bd) console.error(`      ${t.name}: ${t.points}`)
     } else {
-      console.log(`OK    ${pick.name.padEnd(30)} total=${total}  pills=${team_sum}+${old_sum}  host=${host_bonus}`)
+      console.log(`OK    ${pick.name.padEnd(30)} calcPts=${total}  pills=${team_sum}+${old_sum}  host=${host_bonus}  api_total=${total + host_bonus}`)
     }
   }
 
