@@ -150,7 +150,7 @@ function TeamPointsPill({ name, points, live, sub = 'normal', wcLabel, form }: {
   )
 }
 
-type Tab = 'ranking' | 'teams' | 'fun_stats' | 'breakdown'
+type Tab = 'ranking' | 'teams' | 'fun_stats' | 'breakdown' | 'audit'
 
 interface BreakdownPlayer { name: string; total: number; earned: number[] }
 
@@ -247,6 +247,260 @@ function BreakdownTable({ periods, players }: { periods: string[]; players: Brea
   )
 }
 
+interface TeamMatchResult {
+  stage: string; matchday: number | null; opponent: string
+  gf: number; ga: number; result: 'W' | 'D' | 'L'; date: string; winner: string | null
+}
+interface TeamAuditRow {
+  name: string; code: string; tier: string; cost: number; group: string | null
+  results: TeamMatchResult[]; group_qualified: boolean; early_qual_date: string | null; advance_rounds: number
+}
+
+const STAGE_SHORT: Record<string, string> = {
+  GROUP_STAGE: 'GS', ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
+  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
+}
+const KO_STAGES = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
+
+function TeamResultsTable() {
+  const [teams, setTeams] = useState<TeamAuditRow[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/audit-matches')
+      .then(r => r.json())
+      .then(d => { setTeams(d.teams ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <p className="text-white/30 text-sm text-center py-8">Loading match data…</p>
+  if (!teams.length) return <p className="text-white/30 text-sm text-center py-8">No data available.</p>
+
+  // Determine which KO stages have any data
+  const activeKo = KO_STAGES.filter(s => teams.some(t => t.results.some(r => r.stage === s)))
+
+  // Group by... group name, then sort by advance_rounds desc inside each group
+  const grouped = new Map<string, TeamAuditRow[]>()
+  for (const t of teams) {
+    const g = t.group ?? '—'
+    if (!grouped.has(g)) grouped.set(g, [])
+    grouped.get(g)!.push(t)
+  }
+
+  const tierColor: Record<string, string> = { A: '#F5C518', B: '#60A5FA', C: '#4ACA6A', D: '#FB923C' }
+
+  return (
+    <div>
+      <p className="text-white/40 text-xs mb-4">Match results per team — W/D/L with score. Advance rounds (AR) counts group + each KO stage reached.</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: '0 2px' }}>
+          <thead>
+            <tr style={{ color: 'rgba(255,255,255,0.3)' }}>
+              <th className="text-left pl-2 pr-4 py-1 font-normal">Team</th>
+              <th className="text-center px-1 py-1 font-normal">Tier</th>
+              <th className="text-center px-2 py-1 font-normal">MD1</th>
+              <th className="text-center px-2 py-1 font-normal">MD2</th>
+              <th className="text-center px-2 py-1 font-normal">MD3</th>
+              {activeKo.map(s => (
+                <th key={s} className="text-center px-2 py-1 font-normal">{STAGE_SHORT[s]}</th>
+              ))}
+              <th className="text-center px-2 py-1 font-normal">AR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([group, groupTeams]) => (
+              <>
+                <tr key={`g-${group}`}>
+                  <td colSpan={5 + activeKo.length + 1} className="pt-3 pb-0.5 pl-2">
+                    <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.7rem', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.2)' }}>
+                      GROUP {group}
+                    </span>
+                  </td>
+                </tr>
+                {groupTeams.map(t => {
+                  const byMD = [1, 2, 3].map(md => t.results.find(r => r.stage === 'GROUP_STAGE' && r.matchday === md))
+                  const byKO = activeKo.map(s => t.results.find(r => r.stage === s))
+                  const resultBg = (res?: TeamMatchResult) => {
+                    if (!res) return 'transparent'
+                    return res.result === 'W' ? 'rgba(74,202,106,0.15)' : res.result === 'L' ? 'rgba(215,38,56,0.12)' : 'rgba(255,255,255,0.05)'
+                  }
+                  const resultColor = (res?: TeamMatchResult) => {
+                    if (!res) return 'rgba(255,255,255,0.15)'
+                    return res.result === 'W' ? '#4ACA6A' : res.result === 'L' ? '#D72638' : 'rgba(255,255,255,0.5)'
+                  }
+                  const cell = (res?: TeamMatchResult) => {
+                    if (!res) return <span className="text-white/15">—</span>
+                    return (
+                      <span className="font-bold" style={{ color: resultColor(res) }}>
+                        {res.result}<br />
+                        <span className="font-normal text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{res.gf}–{res.ga}</span>
+                      </span>
+                    )
+                  }
+
+                  return (
+                    <tr key={t.name} style={{ background: 'rgba(255,255,255,0.025)' }}>
+                      <td className="pl-2 pr-3 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <Flag code={t.code} name={t.name} size={14} />
+                          <span style={{ color: 'rgba(255,255,255,0.7)' }}>{t.name}</span>
+                          {t.group_qualified && (
+                            <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(245,197,24,0.15)', color: '#F5C518', border: '1px solid rgba(245,197,24,0.3)' }}>✓</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-center px-1 py-1.5 font-bold" style={{ color: tierColor[t.tier] }}>{t.tier}</td>
+                      {[...byMD, ...byKO].map((res, i) => (
+                        <td key={i} className="text-center px-2 py-1.5 leading-tight"
+                          style={{ background: resultBg(res), borderRadius: 4 }}>
+                          {cell(res)}
+                        </td>
+                      ))}
+                      <td className="text-center px-2 py-1.5 font-bold" style={{ fontFamily: 'Impact, sans-serif', color: t.advance_rounds > 0 ? '#F5C518' : 'rgba(255,255,255,0.2)' }}>
+                        {t.advance_rounds}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function AuditTable({ picks }: { picks: RankedPick[] }) {
+  const [view, setView] = useState<'players' | 'teams'>('players')
+  const rows = picks.filter(p => !p.name.toLowerCase().startsWith('test'))
+
+  return (
+    <div>
+      {/* Sub-tab toggle */}
+      <div className="flex gap-1 mb-5 p-1 rounded-xl w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        {([['players', '👤 Players'], ['teams', '🌐 Teams']] as const).map(([v, label]) => (
+          <button key={v} onClick={() => setView(v)}
+            className="px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all"
+            style={{
+              fontFamily: 'Impact, sans-serif', letterSpacing: '0.06em',
+              background: view === v ? 'linear-gradient(135deg, #D72638, #8B0A1A)' : 'transparent',
+              color: view === v ? '#fff' : 'rgba(255,255,255,0.4)',
+            }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'teams' && <TeamResultsTable />}
+
+      {view === 'players' && (
+      <div className="space-y-2">
+      <p className="text-white/40 text-xs mb-4">
+        Full points breakdown per player — current teams, swapped-out old teams, and host bonus.
+      </p>
+      {rows.map(p => {
+        const teamPts  = p.team_points  ?? []
+        const oldPts   = p.old_team_points ?? []
+        const matchTotal = teamPts.reduce((s, t) => s + t.points, 0) + oldPts.reduce((s, t) => s + t.points, 0)
+        const hostBonus  = p.host_bonus ?? 0
+        const calcTotal  = matchTotal + hostBonus
+
+        return (
+          <div key={p.id}
+            className="rounded-xl p-4"
+            style={{ background: 'linear-gradient(145deg, #0D1525, #111827)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            {/* Header row */}
+            <div className="flex items-baseline justify-between mb-3">
+              <div className="flex items-baseline gap-2">
+                <span style={{ fontFamily: 'Impact, sans-serif', color: 'rgba(255,255,255,0.25)', fontSize: '0.85rem' }}>#{p.rank}</span>
+                <span className="font-bold text-white">{p.name}</span>
+                {p.wildcard_used && p.wildcard_effective_from && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)', color: '#FB923C' }}>
+                    WC @ {EFFECTIVE_STAGE_LABEL[p.wildcard_effective_from] ?? p.wildcard_effective_from}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-3 text-xs">
+                <span className="text-white/30">match <span className="text-white/60 font-bold tabular-nums">{matchTotal >= 0 ? '+' : ''}{matchTotal}</span></span>
+                {hostBonus > 0 && <span className="text-white/30">host <span className="font-bold tabular-nums" style={{ color: '#F5C518' }}>+{hostBonus}</span></span>}
+                <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem', color: '#F5C518' }}>{p.total_points.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Current teams */}
+            <div className="flex flex-wrap gap-1.5">
+              {teamPts.map(t => {
+                const team = TEAM_MAP.get(t.name)
+                if (!team) return null
+                const pos = t.points > 0, neg = t.points < 0
+                return (
+                  <span key={t.name}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+                    style={{
+                      background: pos ? 'rgba(74,202,106,0.1)' : neg ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${pos ? 'rgba(74,202,106,0.3)' : neg ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    }}>
+                    <Flag code={team.code} name={team.name} size={14} />
+                    <span style={{ color: 'rgba(255,255,255,0.7)' }}>{team.name}</span>
+                    <span className="font-bold tabular-nums" style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
+                      {t.points >= 0 ? '+' : ''}{t.points}
+                    </span>
+                  </span>
+                )
+              })}
+            </div>
+
+            {/* Old teams (swapped out) */}
+            {oldPts.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(251,146,60,0.15)' }}>
+                <span className="self-center text-[10px] text-orange-400/60 mr-0.5">pre-WC:</span>
+                {oldPts.map(t => {
+                  const team = TEAM_MAP.get(t.name)
+                  if (!team) return null
+                  const pos = t.points > 0, neg = t.points < 0
+                  return (
+                    <span key={t.name}
+                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+                      style={{ background: 'rgba(251,146,60,0.07)', border: '1px solid rgba(251,146,60,0.2)', opacity: 0.85 }}>
+                      <span style={{ color: '#FB923C', fontSize: '0.6rem' }}>▼</span>
+                      <Flag code={team.code} name={team.name} size={14} />
+                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>{team.name}</span>
+                      <span className="font-bold tabular-nums" style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
+                        {t.points >= 0 ? '+' : ''}{t.points}
+                      </span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Host breakdown */}
+            {(p.host_breakdown?.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5 items-center" style={{ borderTop: '1px solid rgba(245,197,24,0.12)' }}>
+                <span className="text-[10px] text-yellow-400/50 mr-0.5">hosts:</span>
+                {p.host_breakdown!.map(h => (
+                  <span key={h.key} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]"
+                    style={{ background: h.correct ? 'rgba(74,202,106,0.1)' : 'rgba(255,255,255,0.04)', border: `1px solid ${h.correct ? 'rgba(74,202,106,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
+                    <span className="text-white/40">{h.key.replace('most_goals_', 'G').replace('dirtiest','dirty').replace('best','best').replace('worst','worst').toUpperCase().slice(0,3)}:</span>
+                    {h.predicted ? (() => { const hf = HOST_FLAGS[h.predicted]; return hf ? <Flag code={hf.code} name={h.predicted} size={11} /> : <span className="text-white/40">{h.predicted}</span> })() : <span className="text-white/25">—</span>}
+                    <span>{h.correct ? '✓' : '✗'}</span>
+                    {h.correct && <span className="text-yellow-400 font-bold">+100</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      </div>
+      )}
+    </div>
+  )
+}
+
 export default function RankingPage() {
   const [picks, setPicks] = useState<RankedPick[]>([])
   const [funStats, setFunStats] = useState<FunStat[]>([])
@@ -328,7 +582,7 @@ export default function RankingPage() {
 
       {funStats.length > 0 && (
         <div className="flex gap-1 mb-6 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {([['ranking', '🏆 Ranking'], ['teams', '🌍 By Country'], ['breakdown', '📅 By Matchday'], ['fun_stats', '📊 Fun Stats']] as [Tab, string][]).map(([t, label]) => (
+          {([['ranking', '🏆 Ranking'], ['teams', '🌍 By Country'], ['breakdown', '📅 By Matchday'], ['fun_stats', '📊 Fun Stats'], ['audit', '🔍 Audit']] as [Tab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -719,6 +973,10 @@ export default function RankingPage() {
             </div>
           )}
         </div>
+      )}
+
+      {tab === 'audit' && picks.length > 0 && (
+        <AuditTable picks={picks} />
       )}
     </section>
   )
