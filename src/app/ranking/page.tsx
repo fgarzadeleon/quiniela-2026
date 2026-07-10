@@ -247,24 +247,26 @@ function BreakdownTable({ periods, players }: { periods: string[]; players: Brea
   )
 }
 
+interface StagePts { match_pts: number; advance_pts: number; total: number }
 interface TeamMatchResult {
   stage: string; matchday: number | null; opponent: string
-  gf: number; ga: number; result: 'W' | 'D' | 'L'; date: string; winner: string | null
+  gf: number; ga: number; result: 'W' | 'D' | 'L'; date: string; winner: string | null; match_pts: number
 }
 interface TeamAuditRow {
   name: string; code: string; tier: string; cost: number; group: string | null
-  results: TeamMatchResult[]; group_qualified: boolean; early_qual_date: string | null; advance_rounds: number
+  results: TeamMatchResult[]; stage_pts: Record<string, StagePts>
+  group_qualified: boolean; early_qual_date: string | null; advance_rounds: number; total_pts: number
 }
 
 const STAGE_SHORT: Record<string, string> = {
-  GROUP_STAGE: 'GS', ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
-  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
 }
 const KO_STAGES = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
 
 function TeamResultsTable() {
   const [teams, setTeams] = useState<TeamAuditRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
     fetch('/api/audit-matches')
@@ -276,12 +278,18 @@ function TeamResultsTable() {
   if (loading) return <p className="text-white/30 text-sm text-center py-8">Loading match data…</p>
   if (!teams.length) return <p className="text-white/30 text-sm text-center py-8">No data available.</p>
 
-  // Determine which KO stages have any data
   const activeKo = KO_STAGES.filter(s => teams.some(t => t.results.some(r => r.stage === s)))
+  // Columns: MD1, MD2, MD3, GS_ADV, then each active KO stage
+  const cols = ['GS_MD1', 'GS_MD2', 'GS_MD3', 'GROUP_ADV', ...activeKo]
+  const colLabel: Record<string, string> = {
+    GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3', GROUP_ADV: 'G.Adv', ...STAGE_SHORT,
+  }
 
-  // Group by... group name, then sort by advance_rounds desc inside each group
+  const q = filter.trim().toLowerCase()
+  const filtered = q ? teams.filter(t => t.name.toLowerCase().includes(q)) : teams
+
   const grouped = new Map<string, TeamAuditRow[]>()
-  for (const t of teams) {
+  for (const t of filtered) {
     const g = t.group ?? '—'
     if (!grouped.has(g)) grouped.set(g, [])
     grouped.get(g)!.push(t)
@@ -289,75 +297,95 @@ function TeamResultsTable() {
 
   const tierColor: Record<string, string> = { A: '#F5C518', B: '#60A5FA', C: '#4ACA6A', D: '#FB923C' }
 
+  function ptCell(sp?: StagePts) {
+    if (!sp || sp.total === 0) return <span className="text-white/15">—</span>
+    const pos = sp.total > 0
+    const color = pos ? '#4ACA6A' : '#D72638'
+    return (
+      <div className="leading-tight">
+        <div className="font-bold tabular-nums" style={{ color }}>{sp.total > 0 ? '+' : ''}{sp.total}</div>
+        {sp.advance_pts !== 0 && (
+          <div className="text-[9px] tabular-nums" style={{ color: '#F5C518', opacity: 0.8 }}>
+            AR +{sp.advance_pts}
+          </div>
+        )}
+        {sp.match_pts !== 0 && (
+          <div className="text-[9px] tabular-nums text-white/30">
+            {sp.match_pts > 0 ? '+' : ''}{sp.match_pts}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
-      <p className="text-white/40 text-xs mb-4">Match results per team — W/D/L with score. Advance rounds (AR) counts group + each KO stage reached.</p>
+      <div className="flex items-center gap-3 mb-4">
+        <p className="text-white/40 text-xs">Points earned per team per matchday/stage. AR = advance round bonus. Hover for match score.</p>
+        <input value={filter} onChange={e => setFilter(e.target.value)}
+          placeholder="Filter team…"
+          className="ml-auto px-3 py-1 rounded-lg text-xs text-white/70 outline-none w-32"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }} />
+      </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: '0 2px' }}>
+        <table className="w-full text-xs" style={{ borderCollapse: 'separate', borderSpacing: '0 1px' }}>
           <thead>
             <tr style={{ color: 'rgba(255,255,255,0.3)' }}>
-              <th className="text-left pl-2 pr-4 py-1 font-normal">Team</th>
+              <th className="text-left pl-2 pr-3 py-1 font-normal sticky left-0" style={{ background: '#0D1117' }}>Team</th>
               <th className="text-center px-1 py-1 font-normal">Tier</th>
-              <th className="text-center px-2 py-1 font-normal">MD1</th>
-              <th className="text-center px-2 py-1 font-normal">MD2</th>
-              <th className="text-center px-2 py-1 font-normal">MD3</th>
-              {activeKo.map(s => (
-                <th key={s} className="text-center px-2 py-1 font-normal">{STAGE_SHORT[s]}</th>
-              ))}
+              {cols.map(c => <th key={c} className="text-center px-2 py-1 font-normal">{colLabel[c]}</th>)}
               <th className="text-center px-2 py-1 font-normal">AR</th>
+              <th className="text-center px-2 py-1 font-normal" style={{ color: '#F5C518' }}>Total</th>
             </tr>
           </thead>
           <tbody>
             {[...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([group, groupTeams]) => (
               <>
                 <tr key={`g-${group}`}>
-                  <td colSpan={5 + activeKo.length + 1} className="pt-3 pb-0.5 pl-2">
+                  <td colSpan={cols.length + 4} className="pt-3 pb-0.5 pl-2">
                     <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.7rem', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.2)' }}>
                       GROUP {group}
                     </span>
                   </td>
                 </tr>
                 {groupTeams.map(t => {
-                  const byMD = [1, 2, 3].map(md => t.results.find(r => r.stage === 'GROUP_STAGE' && r.matchday === md))
-                  const byKO = activeKo.map(s => t.results.find(r => r.stage === s))
-                  const resultBg = (res?: TeamMatchResult) => {
-                    if (!res) return 'transparent'
-                    return res.result === 'W' ? 'rgba(74,202,106,0.15)' : res.result === 'L' ? 'rgba(215,38,56,0.12)' : 'rgba(255,255,255,0.05)'
-                  }
-                  const resultColor = (res?: TeamMatchResult) => {
-                    if (!res) return 'rgba(255,255,255,0.15)'
-                    return res.result === 'W' ? '#4ACA6A' : res.result === 'L' ? '#D72638' : 'rgba(255,255,255,0.5)'
-                  }
-                  const cell = (res?: TeamMatchResult) => {
-                    if (!res) return <span className="text-white/15">—</span>
-                    return (
-                      <span className="font-bold" style={{ color: resultColor(res) }}>
-                        {res.result}<br />
-                        <span className="font-normal text-[10px]" style={{ color: 'rgba(255,255,255,0.4)' }}>{res.gf}–{res.ga}</span>
-                      </span>
-                    )
+                  // Find match result for tooltip title on each cell
+                  const matchForCol = (col: string) => {
+                    if (col.startsWith('GS_MD')) {
+                      const md = parseInt(col.replace('GS_MD', ''))
+                      return t.results.find(r => r.stage === 'GROUP_STAGE' && r.matchday === md)
+                    }
+                    return t.results.find(r => r.stage === col)
                   }
 
                   return (
-                    <tr key={t.name} style={{ background: 'rgba(255,255,255,0.025)' }}>
-                      <td className="pl-2 pr-3 py-1.5">
+                    <tr key={t.name} style={{ background: 'rgba(255,255,255,0.02)' }}>
+                      <td className="pl-2 pr-3 py-1.5 sticky left-0" style={{ background: '#0d1117' }}>
                         <div className="flex items-center gap-1.5">
-                          <Flag code={t.code} name={t.name} size={14} />
-                          <span style={{ color: 'rgba(255,255,255,0.7)' }}>{t.name}</span>
-                          {t.group_qualified && (
-                            <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(245,197,24,0.15)', color: '#F5C518', border: '1px solid rgba(245,197,24,0.3)' }}>✓</span>
-                          )}
+                          <Flag code={t.code} name={t.name} size={13} />
+                          <span style={{ color: 'rgba(255,255,255,0.75)' }}>{t.name}</span>
+                          {t.group_qualified && <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(245,197,24,0.15)', color: '#F5C518', border: '1px solid rgba(245,197,24,0.3)' }}>✓</span>}
                         </div>
                       </td>
                       <td className="text-center px-1 py-1.5 font-bold" style={{ color: tierColor[t.tier] }}>{t.tier}</td>
-                      {[...byMD, ...byKO].map((res, i) => (
-                        <td key={i} className="text-center px-2 py-1.5 leading-tight"
-                          style={{ background: resultBg(res), borderRadius: 4 }}>
-                          {cell(res)}
-                        </td>
-                      ))}
+                      {cols.map(col => {
+                        const sp = t.stage_pts[col]
+                        const m = matchForCol(col)
+                        const title = m ? `${m.result} ${m.gf}–${m.ga} vs ${m.opponent}` : col === 'GROUP_ADV' && t.group_qualified ? 'Group stage advance bonus' : ''
+                        const bg = sp
+                          ? sp.total > 0 ? 'rgba(74,202,106,0.08)' : sp.total < 0 ? 'rgba(215,38,56,0.08)' : 'transparent'
+                          : 'transparent'
+                        return (
+                          <td key={col} title={title} className="text-center px-1.5 py-1.5" style={{ background: bg, borderRadius: 4 }}>
+                            {ptCell(sp)}
+                          </td>
+                        )
+                      })}
                       <td className="text-center px-2 py-1.5 font-bold" style={{ fontFamily: 'Impact, sans-serif', color: t.advance_rounds > 0 ? '#F5C518' : 'rgba(255,255,255,0.2)' }}>
                         {t.advance_rounds}
+                      </td>
+                      <td className="text-center px-2 py-1.5 font-bold tabular-nums" style={{ fontFamily: 'Impact, sans-serif', color: '#F5C518' }}>
+                        {t.total_pts > 0 ? '+' : ''}{t.total_pts}
                       </td>
                     </tr>
                   )
@@ -371,40 +399,53 @@ function TeamResultsTable() {
   )
 }
 
-function AuditTable({ picks }: { picks: RankedPick[] }) {
+function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { periods: string[]; players: BreakdownPlayer[] } | null }) {
   const [view, setView] = useState<'players' | 'teams'>('players')
-  const rows = picks.filter(p => !p.name.toLowerCase().startsWith('test'))
+  const [playerFilter, setPlayerFilter] = useState('')
+  const allRows = picks.filter(p => !p.name.toLowerCase().startsWith('test'))
+  const q = playerFilter.trim().toLowerCase()
+  const rows = q ? allRows.filter(p => p.name.toLowerCase().includes(q)) : allRows
+
+  // Build breakdown lookup
+  const bdMap = new Map<string, number[]>()
+  if (breakdown) breakdown.players.forEach(p => bdMap.set(p.name, p.earned))
+  const periods = breakdown?.periods ?? []
 
   return (
     <div>
       {/* Sub-tab toggle */}
-      <div className="flex gap-1 mb-5 p-1 rounded-xl w-fit" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-        {([['players', '👤 Players'], ['teams', '🌐 Teams']] as const).map(([v, label]) => (
-          <button key={v} onClick={() => setView(v)}
-            className="px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all"
-            style={{
-              fontFamily: 'Impact, sans-serif', letterSpacing: '0.06em',
-              background: view === v ? 'linear-gradient(135deg, #D72638, #8B0A1A)' : 'transparent',
-              color: view === v ? '#fff' : 'rgba(255,255,255,0.4)',
-            }}>
-            {label}
-          </button>
-        ))}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          {([['players', '👤 Players'], ['teams', '🌐 Teams']] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setView(v)}
+              className="px-4 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all"
+              style={{
+                fontFamily: 'Impact, sans-serif', letterSpacing: '0.06em',
+                background: view === v ? 'linear-gradient(135deg, #D72638, #8B0A1A)' : 'transparent',
+                color: view === v ? '#fff' : 'rgba(255,255,255,0.4)',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {view === 'players' && (
+          <input value={playerFilter} onChange={e => setPlayerFilter(e.target.value)}
+            placeholder="Filter player…"
+            className="px-3 py-1.5 rounded-lg text-xs text-white/70 outline-none w-36"
+            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }} />
+        )}
       </div>
 
       {view === 'teams' && <TeamResultsTable />}
 
       {view === 'players' && (
       <div className="space-y-2">
-      <p className="text-white/40 text-xs mb-4">
-        Full points breakdown per player — current teams, swapped-out old teams, and host bonus.
-      </p>
       {rows.map(p => {
         const teamPts  = p.team_points  ?? []
         const oldPts   = p.old_team_points ?? []
         const matchTotal = teamPts.reduce((s, t) => s + t.points, 0) + oldPts.reduce((s, t) => s + t.points, 0)
         const hostBonus  = p.host_bonus ?? 0
-        const calcTotal  = matchTotal + hostBonus
+        const earned = bdMap.get(p.name) ?? []
 
         return (
           <div key={p.id}
@@ -429,6 +470,28 @@ function AuditTable({ picks }: { picks: RankedPick[] }) {
                 <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '1rem', color: '#F5C518' }}>{p.total_points.toLocaleString()}</span>
               </div>
             </div>
+
+            {/* Per-period breakdown bar */}
+            {earned.length > 0 && (
+              <div className="flex gap-1 mb-3 flex-wrap">
+                {periods.map((period, i) => {
+                  const pts = earned[i] ?? 0
+                  const pos = pts > 0, neg = pts < 0
+                  return (
+                    <div key={period} className="flex flex-col items-center gap-0.5 px-1.5 py-1 rounded" style={{
+                      background: pos ? 'rgba(74,202,106,0.08)' : neg ? 'rgba(215,38,56,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${pos ? 'rgba(74,202,106,0.2)' : neg ? 'rgba(215,38,56,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                      minWidth: 36,
+                    }}>
+                      <span style={{ fontSize: '0.6rem', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.04em' }}>{period}</span>
+                      <span className="font-bold tabular-nums text-xs" style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.2)', fontFamily: 'Impact, sans-serif' }}>
+                        {pts === 0 ? '—' : (pts > 0 ? '+' : '') + pts}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Current teams */}
             <div className="flex flex-wrap gap-1.5">
@@ -976,7 +1039,7 @@ export default function RankingPage() {
       )}
 
       {tab === 'audit' && picks.length > 0 && (
-        <AuditTable picks={picks} />
+        <AuditTable picks={picks} breakdown={breakdown} />
       )}
     </section>
   )
