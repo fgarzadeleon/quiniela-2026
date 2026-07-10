@@ -60,9 +60,12 @@ export function getNextRound(stage: MatchStage): MatchStage | null {
 // 4-team group (at most one other team can also reach 6pts alongside them).
 // This ensures wildcarded players get the bonus at the right scoring split.
 export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date> {
-  const groups = new Map<string, Map<string, { pts: number; gd: number; gf: number; played: number; lastDate: Date }>>()
+  const groups = new Map<string, Map<string, { pts: number; gd: number; gf: number; played: number; lastDate: Date; earlyQualDate?: Date }>>()
 
-  for (const m of groupMatches) {
+  // Process in chronological order so earlyQualDate is the actual match that clinched early qualification
+  const sortedMatches = [...groupMatches].sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime())
+
+  for (const m of sortedMatches) {
     const g = m.group_name
     if (!g) continue
     if (!groups.has(g)) groups.set(g, new Map())
@@ -80,6 +83,9 @@ export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date>
       s.gf     += gf
       s.played += 1
       if (matchDate > s.lastDate) s.lastDate = matchDate
+      // Record the first match that clinches early confirmation (6pts, 2+ games).
+      // Used to correctly attribute group advance bonus across wildcard splits.
+      if (s.pts >= 6 && s.played >= 2 && !s.earlyQualDate) s.earlyQualDate = matchDate
     }
   }
 
@@ -100,9 +106,12 @@ export function computeGroupQualifiers(groupMatches: Match[]): Map<string, Date>
       .sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
 
     if (isComplete) {
-      // Full group done — top 2 confirmed, collect 3rd for best-of-12 calculation
-      qualifiers.set(standings[0].team, standings[0].lastDate)
-      qualifiers.set(standings[1].team, standings[1].lastDate)
+      // Full group done — top 2 confirmed, collect 3rd for best-of-12 calculation.
+      // Use earlyQualDate (date they first hit 6pts) if available — this correctly places
+      // group-stage wildcard advance bonuses on whichever side of the split the team qualified.
+      const qualDate = (s: { lastDate: Date; earlyQualDate?: Date }) => s.earlyQualDate ?? s.lastDate
+      qualifiers.set(standings[0].team, qualDate(standings[0]))
+      qualifiers.set(standings[1].team, qualDate(standings[1]))
       thirdPlace.push(standings[2])
     } else {
       allComplete = false
