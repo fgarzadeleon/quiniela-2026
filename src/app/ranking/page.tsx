@@ -594,6 +594,36 @@ function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { pe
                       )
                     })}
                   </tbody>
+                  <tfoot>
+                    {(() => {
+                      const colTotals: Record<string, number> = {}
+                      for (const { stages } of countryBreakdown) {
+                        for (const sk of activeStageKeys) {
+                          if (stages[sk] !== undefined) colTotals[sk] = (colTotals[sk] ?? 0) + stages[sk]
+                        }
+                      }
+                      const grandTotal = Object.values(colTotals).reduce((s, v) => s + v, 0)
+                      return (
+                        <tr style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          <td className="pr-2 py-0.5 font-bold" style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.65rem', letterSpacing: '0.05em' }}>TOTAL</td>
+                          {activeStageKeys.map(sk => {
+                            const v = colTotals[sk] ?? 0
+                            const pos = v > 0, neg = v < 0
+                            return (
+                              <td key={sk} className="text-center px-2 py-0.5 tabular-nums font-bold"
+                                style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.2)' }}>
+                                {v > 0 ? '+' : ''}{v}
+                              </td>
+                            )
+                          })}
+                          <td className="text-center px-2 py-0.5 tabular-nums font-bold"
+                            style={{ fontFamily: 'Impact, sans-serif', color: grandTotal > 0 ? '#4ACA6A' : grandTotal < 0 ? '#D72638' : 'rgba(255,255,255,0.2)' }}>
+                            {grandTotal > 0 ? '+' : ''}{grandTotal}
+                          </td>
+                        </tr>
+                      )
+                    })()}
+                  </tfoot>
                 </table>
               </div>
             )}
