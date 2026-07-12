@@ -256,6 +256,8 @@ interface TeamAuditRow {
   name: string; code: string; tier: string; cost: number; group: string | null
   results: TeamMatchResult[]; stage_pts: Record<string, StagePts>
   group_qualified: boolean; early_qual_date: string | null; advance_rounds: number; total_pts: number
+  picks_count: number
+  player_attribution: Record<string, string[]>  // stageKey → player names who earn those pts
 }
 
 const STAGE_SHORT: Record<string, string> = {
@@ -263,17 +265,8 @@ const STAGE_SHORT: Record<string, string> = {
 }
 const KO_STAGES = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
 
-function TeamResultsTable() {
-  const [teams, setTeams] = useState<TeamAuditRow[]>([])
-  const [loading, setLoading] = useState(true)
+function TeamResultsTable({ teams, loading }: { teams: TeamAuditRow[]; loading: boolean }) {
   const [filter, setFilter] = useState('')
-
-  useEffect(() => {
-    fetch('/api/audit-matches')
-      .then(r => r.json())
-      .then(d => { setTeams(d.teams ?? []); setLoading(false) })
-      .catch(() => setLoading(false))
-  }, [])
 
   if (loading) return <p className="text-white/30 text-sm text-center py-8">Loading match data…</p>
   if (!teams.length) return <p className="text-white/30 text-sm text-center py-8">No data available.</p>
@@ -297,8 +290,13 @@ function TeamResultsTable() {
 
   const tierColor: Record<string, string> = { A: '#F5C518', B: '#60A5FA', C: '#4ACA6A', D: '#FB923C' }
 
-  function ptCell(sp?: StagePts) {
-    if (!sp || sp.total === 0) return <span className="text-white/15">—</span>
+  function ptCell(sp?: StagePts, players?: string[]) {
+    if (!sp || sp.total === 0) {
+      if (players && players.length > 0) {
+        return <span className="text-white/15 text-[9px]">{players.length}×</span>
+      }
+      return <span className="text-white/15">—</span>
+    }
     const pos = sp.total > 0
     const color = pos ? '#4ACA6A' : '#D72638'
     return (
@@ -309,9 +307,14 @@ function TeamResultsTable() {
             AR +{sp.advance_pts}
           </div>
         )}
-        {sp.match_pts !== 0 && (
+        {sp.match_pts !== 0 && sp.advance_pts !== 0 && (
           <div className="text-[9px] tabular-nums text-white/30">
             {sp.match_pts > 0 ? '+' : ''}{sp.match_pts}
+          </div>
+        )}
+        {players && players.length > 0 && (
+          <div className="text-[8px] tabular-nums" style={{ color: 'rgba(255,255,255,0.25)' }}>
+            {players.length}p
           </div>
         )}
       </div>
@@ -321,7 +324,7 @@ function TeamResultsTable() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <p className="text-white/40 text-xs">Points earned per team per matchday/stage. AR = advance round bonus. Hover for match score.</p>
+        <p className="text-white/40 text-xs">Points per team per matchday. AR = advance round bonus. Hover cell for match + who earns it.</p>
         <input value={filter} onChange={e => setFilter(e.target.value)}
           placeholder="Filter team…"
           className="ml-auto px-3 py-1 rounded-lg text-xs text-white/70 outline-none w-32"
@@ -333,6 +336,7 @@ function TeamResultsTable() {
             <tr style={{ color: 'rgba(255,255,255,0.3)' }}>
               <th className="text-left pl-2 pr-3 py-1 font-normal sticky left-0" style={{ background: '#0D1117' }}>Team</th>
               <th className="text-center px-1 py-1 font-normal">Tier</th>
+              <th className="text-center px-1 py-1 font-normal" title="Current picks">Picks</th>
               {cols.map(c => <th key={c} className="text-center px-2 py-1 font-normal">{colLabel[c]}</th>)}
               <th className="text-center px-2 py-1 font-normal">AR</th>
               <th className="text-center px-2 py-1 font-normal" style={{ color: '#F5C518' }}>Total</th>
@@ -342,14 +346,13 @@ function TeamResultsTable() {
             {[...grouped.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([group, groupTeams]) => (
               <>
                 <tr key={`g-${group}`}>
-                  <td colSpan={cols.length + 4} className="pt-3 pb-0.5 pl-2">
+                  <td colSpan={cols.length + 5} className="pt-3 pb-0.5 pl-2">
                     <span style={{ fontFamily: 'Impact, sans-serif', fontSize: '0.7rem', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.2)' }}>
                       GROUP {group}
                     </span>
                   </td>
                 </tr>
                 {groupTeams.map(t => {
-                  // Find match result for tooltip title on each cell
                   const matchForCol = (col: string) => {
                     if (col.startsWith('GS_MD')) {
                       const md = parseInt(col.replace('GS_MD', ''))
@@ -368,16 +371,22 @@ function TeamResultsTable() {
                         </div>
                       </td>
                       <td className="text-center px-1 py-1.5 font-bold" style={{ color: tierColor[t.tier] }}>{t.tier}</td>
+                      <td className="text-center px-1 py-1.5" style={{ color: t.picks_count > 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.15)' }}>
+                        {t.picks_count > 0 ? t.picks_count : '—'}
+                      </td>
                       {cols.map(col => {
                         const sp = t.stage_pts[col]
                         const m = matchForCol(col)
-                        const title = m ? `${m.result} ${m.gf}–${m.ga} vs ${m.opponent}` : ''
+                        const players = t.player_attribution?.[col] ?? []
+                        const matchTitle = m ? `${m.result} ${m.gf}–${m.ga} vs ${m.opponent}` : ''
+                        const playerTitle = players.length > 0 ? `\nEarns for: ${players.join(', ')}` : (sp ? '\nNo current picks' : '')
+                        const title = matchTitle + playerTitle
                         const bg = sp
                           ? sp.total > 0 ? 'rgba(74,202,106,0.08)' : sp.total < 0 ? 'rgba(215,38,56,0.08)' : 'transparent'
                           : 'transparent'
                         return (
                           <td key={col} title={title} className="text-center px-1.5 py-1.5" style={{ background: bg, borderRadius: 4 }}>
-                            {ptCell(sp)}
+                            {ptCell(sp, players.length > 0 ? players : undefined)}
                           </td>
                         )
                       })}
@@ -399,17 +408,55 @@ function TeamResultsTable() {
   )
 }
 
+const AUDIT_SK_ORDER = ['GS_MD1', 'GS_MD2', 'GS_MD3', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
+const SK_LABEL: Record<string, string> = {
+  GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
+}
+const TIER_COLOR: Record<string, string> = { A: '#F5C518', B: '#60A5FA', C: '#4ACA6A', D: '#FB923C' }
+
 function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { periods: string[]; players: BreakdownPlayer[] } | null }) {
   const [view, setView] = useState<'players' | 'teams'>('players')
   const [playerFilter, setPlayerFilter] = useState('')
+  const [auditTeams, setAuditTeams] = useState<TeamAuditRow[]>([])
+  const [auditLoading, setAuditLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/audit-matches')
+      .then(r => r.json())
+      .then(d => { setAuditTeams(d.teams ?? []); setAuditLoading(false) })
+      .catch(() => setAuditLoading(false))
+  }, [])
+
   const allRows = picks.filter(p => !p.name.toLowerCase().startsWith('test'))
   const q = playerFilter.trim().toLowerCase()
   const rows = q ? allRows.filter(p => p.name.toLowerCase().includes(q)) : allRows
 
-  // Build breakdown lookup
   const bdMap = new Map<string, number[]>()
   if (breakdown) breakdown.players.forEach(p => bdMap.set(p.name, p.earned))
   const periods = breakdown?.periods ?? []
+
+  // Stage keys that actually have data (to build table columns)
+  const activeStageKeys = AUDIT_SK_ORDER.filter(sk => auditTeams.some(t => t.stage_pts[sk]))
+
+  // For each player: list of {team, stages} where stages[sk] = pts earned from that team at that sk
+  function getPlayerCountryBreakdown(playerName: string) {
+    const result: { team: TeamAuditRow; stages: Record<string, number>; teamTotal: number }[] = []
+    for (const team of auditTeams) {
+      const stages: Record<string, number> = {}
+      for (const sk of activeStageKeys) {
+        const earners = team.player_attribution?.[sk] ?? []
+        if (earners.includes(playerName) && team.stage_pts[sk]) {
+          stages[sk] = team.stage_pts[sk].total
+        }
+      }
+      if (Object.keys(stages).length === 0) continue
+      const teamTotal = Object.values(stages).reduce((s, v) => s + v, 0)
+      result.push({ team, stages, teamTotal })
+    }
+    // Sort: highest absolute total first
+    return result.sort((a, b) => Math.abs(b.teamTotal) - Math.abs(a.teamTotal))
+  }
 
   return (
     <div>
@@ -436,7 +483,7 @@ function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { pe
         )}
       </div>
 
-      {view === 'teams' && <TeamResultsTable />}
+      {view === 'teams' && <TeamResultsTable teams={auditTeams} loading={auditLoading} />}
 
       {view === 'players' && (
       <div className="space-y-2">
@@ -446,6 +493,7 @@ function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { pe
         const matchTotal = teamPts.reduce((s, t) => s + t.points, 0) + oldPts.reduce((s, t) => s + t.points, 0)
         const hostBonus  = p.host_bonus ?? 0
         const earned = bdMap.get(p.name) ?? []
+        const countryBreakdown = getPlayerCountryBreakdown(p.name)
 
         return (
           <div key={p.id}
@@ -493,50 +541,60 @@ function AuditTable({ picks, breakdown }: { picks: RankedPick[]; breakdown: { pe
               </div>
             )}
 
-            {/* Current teams */}
-            <div className="flex flex-wrap gap-1.5">
-              {teamPts.map(t => {
-                const team = TEAM_MAP.get(t.name)
-                if (!team) return null
-                const pos = t.points > 0, neg = t.points < 0
-                return (
-                  <span key={t.name}
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                    style={{
-                      background: pos ? 'rgba(74,202,106,0.1)' : neg ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${pos ? 'rgba(74,202,106,0.3)' : neg ? 'rgba(215,38,56,0.3)' : 'rgba(255,255,255,0.1)'}`,
-                    }}>
-                    <Flag code={team.code} name={team.name} size={14} />
-                    <span style={{ color: 'rgba(255,255,255,0.7)' }}>{team.name}</span>
-                    <span className="font-bold tabular-nums" style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.3)' }}>
-                      {t.points >= 0 ? '+' : ''}{t.points}
-                    </span>
-                  </span>
-                )
-              })}
-            </div>
-
-            {/* Old teams (swapped out) */}
-            {oldPts.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(251,146,60,0.15)' }}>
-                <span className="self-center text-[10px] text-orange-400/60 mr-0.5">pre-WC:</span>
-                {oldPts.map(t => {
-                  const team = TEAM_MAP.get(t.name)
-                  if (!team) return null
-                  const pos = t.points > 0, neg = t.points < 0
-                  return (
-                    <span key={t.name}
-                      className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                      style={{ background: 'rgba(251,146,60,0.07)', border: '1px solid rgba(251,146,60,0.2)', opacity: 0.85 }}>
-                      <span style={{ color: '#FB923C', fontSize: '0.6rem' }}>▼</span>
-                      <Flag code={team.code} name={team.name} size={14} />
-                      <span style={{ color: 'rgba(255,255,255,0.5)' }}>{team.name}</span>
-                      <span className="font-bold tabular-nums" style={{ color: pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.25)' }}>
-                        {t.points >= 0 ? '+' : ''}{t.points}
-                      </span>
-                    </span>
-                  )
-                })}
+            {/* Per-country per-gameweek breakdown table */}
+            {!auditLoading && countryBreakdown.length > 0 && (
+              <div className="overflow-x-auto mb-2">
+                <table className="text-[10px]" style={{ borderCollapse: 'separate', borderSpacing: '1px 1px', minWidth: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th className="text-left pr-2 py-0.5 font-normal" style={{ color: 'rgba(255,255,255,0.2)', minWidth: 90 }}>Country</th>
+                      {activeStageKeys.map(sk => (
+                        <th key={sk} className="text-center px-2 py-0.5 font-normal tabular-nums" style={{ color: 'rgba(255,255,255,0.2)', minWidth: 36 }}>
+                          {SK_LABEL[sk]}
+                        </th>
+                      ))}
+                      <th className="text-center px-2 py-0.5 font-bold" style={{ color: 'rgba(255,255,255,0.4)', minWidth: 44 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {countryBreakdown.map(({ team, stages, teamTotal }) => {
+                      const teamInfo = TEAM_MAP.get(team.name)
+                      const isOld = oldPts.some(t => t.name === team.name)
+                      return (
+                        <tr key={team.name} style={{ opacity: isOld ? 0.7 : 1 }}>
+                          <td className="pr-2 py-0.5">
+                            <div className="flex items-center gap-1">
+                              {teamInfo && <Flag code={teamInfo.code} name={teamInfo.name} size={11} />}
+                              <span style={{ color: TIER_COLOR[team.tier] ?? 'rgba(255,255,255,0.5)' }}>
+                                {team.name}
+                              </span>
+                              {isOld && <span style={{ color: '#FB923C', fontSize: '0.6rem' }}>▼</span>}
+                            </div>
+                          </td>
+                          {activeStageKeys.map(sk => {
+                            const pts = stages[sk]
+                            const hasIt = pts !== undefined
+                            const pos = hasIt && pts > 0
+                            const neg = hasIt && pts < 0
+                            return (
+                              <td key={sk} className="text-center px-2 py-0.5 tabular-nums font-bold rounded"
+                                style={{
+                                  background: hasIt ? (pos ? 'rgba(74,202,106,0.1)' : neg ? 'rgba(215,38,56,0.1)' : 'rgba(255,255,255,0.03)') : 'transparent',
+                                  color: hasIt ? (pos ? '#4ACA6A' : neg ? '#D72638' : 'rgba(255,255,255,0.2)') : 'rgba(255,255,255,0.07)',
+                                }}>
+                                {hasIt ? (pts > 0 ? '+' : '') + pts : '—'}
+                              </td>
+                            )
+                          })}
+                          <td className="text-center px-2 py-0.5 tabular-nums font-bold"
+                            style={{ fontFamily: 'Impact, sans-serif', color: teamTotal > 0 ? '#4ACA6A' : teamTotal < 0 ? '#D72638' : 'rgba(255,255,255,0.2)' }}>
+                            {teamTotal > 0 ? '+' : ''}{teamTotal}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
 

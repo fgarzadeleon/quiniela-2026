@@ -136,9 +136,9 @@ function MatchCard({ match, heat }: { match: MatchScore; heat?: HeatMatch }) {
       {(() => {
         const isPSO = match.score.duration === 'PENALTY_SHOOTOUT'
         const isET = match.score.duration === 'EXTRA_TIME'
-        // Use ET score when decided in extra time; FT score for penalties (tied FT/ET)
-        const hg = (isET ? match.score.extraTime?.home : null) ?? match.score.fullTime.home ?? 0
-        const ag = (isET ? match.score.extraTime?.away : null) ?? match.score.fullTime.away ?? 0
+        // fullTime = cumulative (reg + ET + PSO). Subtract penalties to strip PSO goals.
+        const hg = isPSO ? (match.score.fullTime.home ?? 0) - (match.score.penalties?.home ?? 0) : match.score.fullTime.home ?? 0
+        const ag = isPSO ? (match.score.fullTime.away ?? 0) - (match.score.penalties?.away ?? 0) : match.score.fullTime.away ?? 0
         const winner = match.score.winner ?? null
         const homeResult = teamPoints(match.homeTeam.name, hg, ag, match.stage, winner, 'home')
         const awayResult = teamPoints(match.awayTeam.name, ag, hg, match.stage, winner, 'away')

@@ -45,10 +45,12 @@ async function fetchMatches(): Promise<{ matches: Match[]; liveTeams: Set<string
       if (fdStatus === 'TIMED' || fdStatus === 'SCHEDULED') continue
       if (!SCOREABLE_STATUSES.has(fdStatus)) continue
       const score = m.score as Record<string, Record<string, number | null>>
-      // In knockout rounds, use extraTime score if available (ET winner scores as WIN/LOSS).
-      // For penalty shootouts: extraTime score is tied; winner is determined by score.winner field.
-      const homeScore = score?.extraTime?.home ?? score?.fullTime?.home
-      const awayScore = score?.extraTime?.away ?? score?.fullTime?.away
+      // FD API: fullTime = cumulative (reg + ET + PSO goals). ET matches: fullTime = winner score.
+      // PSO: subtract penalty goals to get the pre-PSO tied score (reg + ET only).
+      const duration = (m.score as Record<string, unknown>)?.duration as string | undefined
+      const isPSO = duration === 'PENALTY_SHOOTOUT'
+      const homeScore = isPSO ? (score?.fullTime?.home ?? 0) - (score?.penalties?.home ?? 0) : score?.fullTime?.home
+      const awayScore = isPSO ? (score?.fullTime?.away ?? 0) - (score?.penalties?.away ?? 0) : score?.fullTime?.away
       const winner = (m.score as Record<string, unknown>)?.winner as string | null
       const stage = STAGE_MAP[m.stage as string]
       if (homeScore == null || awayScore == null || !stage) continue
@@ -85,14 +87,12 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
 
   const groupQualifiers = computeGroupQualifiers(scoreable.filter(m => m.stage === 'GROUP_STAGE'))
 
+  // Count only current team1-5 so swapped-out wildcard teams don't inflate the count
   const picksCount = new Map<string, number>()
   for (const p of picks) {
-    const teams = new Set([
-      p.team1, p.team2, p.team3, p.team4, p.team5,
-      p.wildcard_old_team1, p.wildcard_old_team2, p.wildcard_old_team3,
-      p.wildcard_old_team4, p.wildcard_old_team5,
-    ].filter(Boolean) as string[])
-    for (const t of teams) picksCount.set(t, (picksCount.get(t) ?? 0) + 1)
+    for (const t of [p.team1, p.team2, p.team3, p.team4, p.team5]) {
+      if (t) picksCount.set(t, (picksCount.get(t) ?? 0) + 1)
+    }
   }
 
   const rows: TeamTableRow[] = []
@@ -110,43 +110,16 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
       )
       if (stageMatches.length === 0) continue
 
-      if (stage !== 'GROUP_STAGE' && stage !== 'ROUND_OF_32') { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
-
-      // R32: award R16 entry advance proactively for winners (confirmed to play in R16).
-      // Only if no R16 matches exist yet for this team (avoids double-count when R16 starts).
-      if (stage === 'ROUND_OF_32') {
-        const hasR16 = scoreable.some(m => m.stage === 'ROUND_OF_16' && (m.home_team === teamName || m.away_team === teamName))
-        if (!hasR16) {
-          const wonR32 = stageMatches.some(m => {
-            const isHome = m.home_team === teamName
-            const gf = isHome ? m.home_score : m.away_score
-            const ga = isHome ? m.away_score : m.home_score
-            return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
-          })
-          if (wonR32) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
-        }
-      }
-
-      // Proactive advance for R16/QF/SF winners when the next stage hasn't started yet.
-      // Mirrors the R32 proactive logic: avoids leaving a gap between rounds where the
-      // advance point is owed but not yet awarded.
-      if (stage === 'ROUND_OF_16' || stage === 'QUARTER_FINALS' || stage === 'SEMI_FINALS') {
-        const NEXT_STAGE: Partial<Record<string, Match['stage']>> = {
-          ROUND_OF_16: 'QUARTER_FINALS',
-          QUARTER_FINALS: 'SEMI_FINALS',
-          SEMI_FINALS: 'FINAL',
-        }
-        const nextStage = NEXT_STAGE[stage]!
-        const hasNextStage = scoreable.some(m => m.stage === nextStage && (m.home_team === teamName || m.away_team === teamName))
-        if (!hasNextStage) {
-          const wonStage = stageMatches.some(m => {
-            const isHome = m.home_team === teamName
-            const mGf = isHome ? m.home_score : m.away_score
-            const mGa = isHome ? m.away_score : m.home_score
-            return mGf > mGa || (mGf === mGa && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
-          })
-          if (wonStage) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
-        }
+      // Advance for WINNING this KO round, credited immediately in the current stage's column.
+      // QF advance goes only to QF winners; R16 advance only to R16 winners, etc.
+      if (stage !== 'GROUP_STAGE' && stage !== 'FINAL') {
+        const wonStage = stageMatches.some(m => {
+          const isHome = m.home_team === teamName
+          const mGf = isHome ? m.home_score : m.away_score
+          const mGa = isHome ? m.away_score : m.home_score
+          return mGf > mGa || (mGf === mGa && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+        })
+        if (wonStage) { pts += scoring.advanceRound; advance_pts += scoring.advanceRound; advance_rounds++ }
       }
 
       for (const m of stageMatches) {

@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getTeam, FD_TO_OURS, SCORING, STAGE_ORDER } from '@/lib/teams'
 import { computeGroupQualifiers } from '@/lib/scoring'
-import { Match } from '@/types'
+import { createServerClient } from '@/lib/supabase'
+import { AUDIT_STAGE_KEYS, activeTeamsForPick } from '@/lib/audit'
+import { Match, Pick } from '@/types'
+
+export { AUDIT_STAGE_KEYS, activeTeamsForPick }
+export type { AuditStageKey } from '@/lib/audit'
 
 export const dynamic = 'force-dynamic'
 
 const FD_BASE = 'https://api.football-data.org/v4'
 const FD_KEY = process.env.FOOTBALL_DATA_API_KEY
-
-// Teams confirmed qualified after MD2 (6pts from 2 wins before the MD3 round began).
-// Used to verify group advance bonus lands in the MD2 column, not MD3.
-const MD2_EARLY_QUALIFIERS = new Set([
-  'Mexico', 'USA', 'Germany', 'France', 'Argentina', 'Norway', 'Colombia',
-])
 
 const STAGE_MAP: Record<string, Match['stage']> = {
   GROUP_STAGE:    'GROUP_STAGE',
@@ -50,11 +49,13 @@ export interface TeamAuditRow {
   cost: number
   group: string | null
   results: TeamMatchResult[]
-  stage_pts: Record<string, StagePts>   // keyed by stage+matchday e.g. "GS_MD1", "R32", "R16"…
+  stage_pts: Record<string, StagePts>   // keyed by GS_MD1/GS_MD2/GS_MD3/ROUND_OF_32/…
   group_qualified: boolean
   early_qual_date: string | null
   advance_rounds: number
   total_pts: number
+  picks_count: number                        // players who currently hold this team
+  player_attribution: Record<string, string[]>  // stageKey → player names earning those pts
 }
 
 function matchPts(teamName: string, gf: number, ga: number): number {
@@ -68,17 +69,23 @@ function matchPts(teamName: string, gf: number, ga: number): number {
 export async function GET() {
   if (!FD_KEY) return NextResponse.json({ teams: [] })
   try {
-    const res = await fetch(`${FD_BASE}/competitions/WC/matches`, {
-      headers: { 'X-Auth-Token': FD_KEY },
-      next: { revalidate: 60 },
-    })
-    if (!res.ok) return NextResponse.json({ teams: [] })
-    const { matches: fdMatches = [] } = await res.json()
+    const supabase = createServerClient()
+    const [fdRes, { data: rawPicks }] = await Promise.all([
+      fetch(`${FD_BASE}/competitions/WC/matches`, {
+        headers: { 'X-Auth-Token': FD_KEY },
+        next: { revalidate: 60 },
+      }).then(r => r.ok ? r.json() : { matches: [] }).catch(() => ({ matches: [] })),
+      supabase.from('picks').select('*'),
+    ])
+    const { matches: fdMatches = [] } = fdRes as { matches: Record<string, unknown>[] }
+
+    const picks = ((rawPicks ?? []) as Pick[])
+      .filter(p => !p.name.toLowerCase().startsWith('test'))
 
     const LIVE = new Set(['IN_PLAY', 'PAUSED', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'])
     const processed: (Match & { matchday?: number | null })[] = []
 
-    for (const m of fdMatches as Record<string, unknown>[]) {
+    for (const m of fdMatches) {
       const fdStatus = m.status as string
       if (fdStatus === 'TIMED' || fdStatus === 'SCHEDULED' || fdStatus === 'POSTPONED') continue
       const homeTeam = m.homeTeam as Record<string, string>
@@ -87,8 +94,10 @@ export async function GET() {
       const away = FD_TO_OURS[awayTeam?.name] ?? awayTeam?.name ?? ''
       if (!home || !away) continue
       const score = m.score as Record<string, Record<string, number | null>>
-      const homeScore = score?.extraTime?.home ?? score?.fullTime?.home
-      const awayScore = score?.extraTime?.away ?? score?.fullTime?.away
+      const duration = (m.score as Record<string, unknown>)?.duration as string | undefined
+      const isPSO = duration === 'PENALTY_SHOOTOUT'
+      const homeScore = isPSO ? (score?.fullTime?.home ?? 0) - (score?.penalties?.home ?? 0) : score?.fullTime?.home
+      const awayScore = isPSO ? (score?.fullTime?.away ?? 0) - (score?.penalties?.away ?? 0) : score?.fullTime?.away
       const winner = (m.score as Record<string, unknown>)?.winner as string | null
       const stage = STAGE_MAP[m.stage as string]
       if (homeScore == null || awayScore == null || !stage) continue
@@ -123,6 +132,7 @@ export async function GET() {
           results: [], stage_pts: {},
           group_qualified: false, early_qual_date: null,
           advance_rounds: 0, total_pts: 0,
+          picks_count: 0, player_attribution: {},
         })
       }
       const row = teamData.get(teamName)!
@@ -143,11 +153,8 @@ export async function GET() {
         const result: 'W' | 'D' | 'L' = gf > ga ? 'W' : gf < ga ? 'L' : (wonMatch ? 'W' : 'D')
         const mPts = matchPts(teamName, gf, ga)
 
-        // Stage key for per-matchday breakdown
         const md = (m as { matchday?: number | null }).matchday
-        const stageKey = m.stage === 'GROUP_STAGE'
-          ? `GS_MD${md ?? '?'}`
-          : m.stage
+        const stageKey = m.stage === 'GROUP_STAGE' ? `GS_MD${md ?? '?'}` : m.stage
 
         row.results.push({
           stage: m.stage,
@@ -163,7 +170,7 @@ export async function GET() {
       }
     }
 
-    // Now compute advance round bonuses using the same logic as computeTeamTable
+    // Compute advance round bonuses — mirrors computeTeamTable logic exactly
     for (const [teamName, row] of teamData) {
       const team = getTeam(teamName)
       if (!team) continue
@@ -177,8 +184,7 @@ export async function GET() {
         row.total_pts += amt
       }
 
-      // Group advance — place bonus in the matchday column where it was earned.
-      // Find the group result whose date matches earlyQualDate; fall back to GS_MD3.
+      // Group advance — place bonus in the matchday column where it was earned
       const qualDate = groupQualifiers.get(teamName)
       row.group_qualified = !!qualDate
       row.early_qual_date = qualDate ? qualDate.toISOString() : null
@@ -191,48 +197,29 @@ export async function GET() {
         addAdvance(groupAdvKey, scoring.advanceRound)
       }
 
-      // Initialise total_pts from all stage_pts collected so far (match pts + group advance)
+      // Re-sum total_pts from all stage match pts + group advance, then add KO advances below
       row.total_pts = 0
       for (const sp of Object.values(row.stage_pts)) {
         row.total_pts += sp.match_pts + sp.advance_pts
       }
-      // Reset advance_rounds for the knockout calculation below (group advance already counted via addAdvance above)
       row.advance_rounds = qualDate ? 1 : 0
-
-      // Knockout advance — mirrors computeTeamTable exactly
-      const NEXT_STAGE: Partial<Record<string, Match['stage']>> = {
-        ROUND_OF_32:    'ROUND_OF_16',
-        ROUND_OF_16:    'QUARTER_FINALS',
-        QUARTER_FINALS: 'SEMI_FINALS',
-        SEMI_FINALS:    'FINAL',
-      }
 
       for (const stage of STAGE_ORDER) {
         if (stage === 'GROUP_STAGE') continue
         const stageMatches = processed.filter(m => m.stage === stage && (m.home_team === teamName || m.away_team === teamName))
         if (stageMatches.length === 0) continue
 
-        // Reaching R16+ = won previous round = +1 AR
-        if (stage !== 'ROUND_OF_32') {
-          addAdvance(stage, scoring.advanceRound)
+        // Advance for WINNING this stage (points go in the round where earned)
+        if (stage !== 'FINAL') {
+          const wonStage = stageMatches.some(m => {
+            const isHome = m.home_team === teamName
+            const gf = isHome ? m.home_score : m.away_score
+            const ga = isHome ? m.away_score : m.home_score
+            return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
+          })
+          if (wonStage) addAdvance(stage, scoring.advanceRound)
         }
 
-        // For R32/R16/QF/SF: check proactive advance for winning when next stage hasn't started
-        if (stage === 'ROUND_OF_32' || stage === 'ROUND_OF_16' || stage === 'QUARTER_FINALS' || stage === 'SEMI_FINALS') {
-          const nextStage = NEXT_STAGE[stage]!
-          const hasNextStage = processed.some(m => m.stage === nextStage && (m.home_team === teamName || m.away_team === teamName))
-          if (!hasNextStage) {
-            const wonStage = stageMatches.some(m => {
-              const isHome = m.home_team === teamName
-              const gf = isHome ? m.home_score : m.away_score
-              const ga = isHome ? m.away_score : m.home_score
-              return gf > ga || (gf === ga && m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
-            })
-            if (wonStage) addAdvance(stage, scoring.advanceRound)
-          }
-        }
-
-        // Champion bonus
         if (stage === 'FINAL') {
           const finalMatch = stageMatches[0]
           const isHome = finalMatch.home_team === teamName
@@ -248,11 +235,32 @@ export async function GET() {
         }
       }
 
-      // Sort results chronologically
       row.results.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     }
 
-    // Sort: by group (A-L) then total_pts desc
+    // --- Player attribution ---
+    // For each team and each stage key: which players earn that team's points at that stage.
+    // Uses activeTeamsForPick() which handles all wildcard splits correctly.
+    for (const [teamName, row] of teamData) {
+      for (const stageKey of AUDIT_STAGE_KEYS) {
+        if (!row.stage_pts[stageKey]) continue
+        const earners = picks
+          .filter(p => activeTeamsForPick(p, stageKey).includes(teamName))
+          .map(p => p.name)
+        if (earners.length > 0) row.player_attribution[stageKey] = earners
+      }
+      // Current picks count = players who hold this team at the latest active stage
+      const latestStageKey = [...AUDIT_STAGE_KEYS].reverse().find(sk => row.stage_pts[sk]) ?? null
+      if (latestStageKey && row.player_attribution[latestStageKey]) {
+        row.picks_count = row.player_attribution[latestStageKey].length
+      } else {
+        // Fall back: count who currently has this team in their team1-5
+        row.picks_count = picks.filter(p =>
+          [p.team1, p.team2, p.team3, p.team4, p.team5].includes(teamName)
+        ).length
+      }
+    }
+
     const teams = [...teamData.values()].sort((a, b) => {
       if (a.group && b.group && a.group !== b.group) return a.group.localeCompare(b.group)
       return b.total_pts - a.total_pts || a.name.localeCompare(b.name)
