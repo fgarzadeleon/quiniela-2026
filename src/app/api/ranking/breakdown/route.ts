@@ -18,16 +18,17 @@ const STAGE_MAP: Record<string, Match['stage']> = {
   ROUND_OF_16:    'ROUND_OF_16',
   QUARTER_FINALS: 'QUARTER_FINALS',
   SEMI_FINALS:    'SEMI_FINALS',
+  THIRD_PLACE:    'THIRD_PLACE',
   FINAL:          'FINAL',
 }
 
 const SK_TO_PERIOD: Record<string, string> = {
   GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3',
   ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
-  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'Final',
+  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', THIRD_PLACE: '3rd', FINAL: 'Final',
 }
 
-const KO_SK_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL'] as const
+const KO_SK_ORDER = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL'] as const
 type KoSk = typeof KO_SK_ORDER[number]
 
 
@@ -92,7 +93,9 @@ export async function GET() {
       const gf = isHome ? m.home_score : m.away_score
       const ga = isHome ? m.away_score : m.home_score
       const base = gf > ga ? s.win : gf < ga ? s.loss : s.draw
-      const mPts = base + gf * s.goalFor + ga * s.goalAgainst
+      // 3rd place match: win/draw/loss counts for half, goals stay full value
+      const resultPts = m.stage === 'THIRD_PLACE' ? base / 2 : base
+      const mPts = resultPts + gf * s.goalFor + ga * s.goalAgainst
 
       if (!teamMatchPts.has(teamName)) teamMatchPts.set(teamName, new Map())
       const skMap = teamMatchPts.get(teamName)!
@@ -168,13 +171,14 @@ export async function GET() {
             for (const koS of KO_SK_ORDER) {
               if (KO_SK_ORDER.indexOf(koS) > KO_SK_ORDER.indexOf(sk)) break
               if (KO_SK_ORDER.indexOf(koS) < KO_SK_ORDER.indexOf(first)) continue
-              if (teamWonStage.get(team)?.has(koS)) {
+              // 3rd place match is a consolation game, not an advancement — no bonus either way.
+              if (koS !== 'THIRD_PLACE' && teamWonStage.get(team)?.has(koS)) {
                 pts += koS === 'FINAL' ? s.champion : s.advanceRound
               }
             }
           } else {
             // Subsequent stage: only advance for winning this specific stage
-            if (teamWonStage.get(team)?.has(sk)) {
+            if (sk !== 'THIRD_PLACE' && teamWonStage.get(team)?.has(sk)) {
               pts += sk === 'FINAL' ? s.champion : s.advanceRound
             }
           }

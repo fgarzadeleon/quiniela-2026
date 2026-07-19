@@ -21,6 +21,7 @@ const STAGE_MAP: Record<string, Match['stage']> = {
   ROUND_OF_16:    'ROUND_OF_16',
   QUARTER_FINALS: 'QUARTER_FINALS',
   SEMI_FINALS:    'SEMI_FINALS',
+  THIRD_PLACE:    'THIRD_PLACE',
   FINAL:          'FINAL',
 }
 
@@ -58,12 +59,14 @@ export interface TeamAuditRow {
   player_attribution: Record<string, string[]>  // stageKey → player names earning those pts
 }
 
-function matchPts(teamName: string, gf: number, ga: number): number {
+function matchPts(teamName: string, stage: string, gf: number, ga: number): number {
   const team = getTeam(teamName)
   if (!team) return 0
   const s = SCORING[team.tier]
   const base = gf > ga ? s.win : gf < ga ? s.loss : s.draw
-  return base + gf * s.goalFor + ga * s.goalAgainst
+  // 3rd place match: win/draw/loss counts for half, goals stay full value
+  const resultPts = stage === 'THIRD_PLACE' ? base / 2 : base
+  return resultPts + gf * s.goalFor + ga * s.goalAgainst
 }
 
 export async function GET() {
@@ -151,7 +154,7 @@ export async function GET() {
           gf > ga ? true : gf < ga ? false :
           (m.winner === (isHome ? 'HOME_TEAM' : 'AWAY_TEAM'))
         const result: 'W' | 'D' | 'L' = gf > ga ? 'W' : gf < ga ? 'L' : (wonMatch ? 'W' : 'D')
-        const mPts = matchPts(teamName, gf, ga)
+        const mPts = matchPts(teamName, m.stage, gf, ga)
 
         const md = (m as { matchday?: number | null }).matchday
         const stageKey = m.stage === 'GROUP_STAGE' ? `GS_MD${md ?? '?'}` : m.stage
@@ -210,7 +213,8 @@ export async function GET() {
         if (stageMatches.length === 0) continue
 
         // Advance for WINNING this stage (points go in the round where earned)
-        if (stage !== 'FINAL') {
+        // 3rd place match is a consolation game, not an advancement — no bonus either way.
+        if (stage !== 'FINAL' && stage !== 'THIRD_PLACE') {
           const wonStage = stageMatches.some(m => {
             const isHome = m.home_team === teamName
             const gf = isHome ? m.home_score : m.away_score

@@ -88,6 +88,7 @@ export const STAGE_ORDER = [
   'ROUND_OF_16',
   'QUARTER_FINALS',
   'SEMI_FINALS',
+  'THIRD_PLACE',
   'FINAL',
 ]
 

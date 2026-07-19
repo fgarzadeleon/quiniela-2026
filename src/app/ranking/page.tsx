@@ -261,9 +261,9 @@ interface TeamAuditRow {
 }
 
 const STAGE_SHORT: Record<string, string> = {
-  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', THIRD_PLACE: '3rd', FINAL: 'F',
 }
-const KO_STAGES = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
+const KO_STAGES = ['ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL']
 
 function TeamResultsTable({ teams, loading }: { teams: TeamAuditRow[]; loading: boolean }) {
   const [filter, setFilter] = useState('')
@@ -408,10 +408,10 @@ function TeamResultsTable({ teams, loading }: { teams: TeamAuditRow[]; loading: 
   )
 }
 
-const AUDIT_SK_ORDER = ['GS_MD1', 'GS_MD2', 'GS_MD3', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL']
+const AUDIT_SK_ORDER = ['GS_MD1', 'GS_MD2', 'GS_MD3', 'ROUND_OF_32', 'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL']
 const SK_LABEL: Record<string, string> = {
   GS_MD1: 'MD1', GS_MD2: 'MD2', GS_MD3: 'MD3',
-  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'F',
+  ROUND_OF_32: 'R32', ROUND_OF_16: 'R16', QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', THIRD_PLACE: '3rd', FINAL: 'F',
 }
 const TIER_COLOR: Record<string, string> = { A: '#F5C518', B: '#60A5FA', C: '#4ACA6A', D: '#FB923C' }
 

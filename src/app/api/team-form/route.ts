@@ -66,8 +66,11 @@ export async function GET() {
       // For penalty shootouts: ET score is level (both get D for match result),
       // but the winner field tells us who actually advanced (gets gold ring)
       const winner = (m.score as Record<string, unknown>)?.winner as string | null
-      const homeAdvanced = isKnockout && (homeResult === 'W' || (homeResult === 'D' && winner === 'HOME_TEAM'))
-      const awayAdvanced = isKnockout && (awayResult === 'W' || (awayResult === 'D' && winner === 'AWAY_TEAM'))
+      // 3rd place match is a consolation game, not an advancement — no gold ring for winning it,
+      // and it must not reverse a team's elimination status from their semi-final loss.
+      const isAdvancingKnockout = isKnockout && stage !== 'THIRD_PLACE'
+      const homeAdvanced = isAdvancingKnockout && (homeResult === 'W' || (homeResult === 'D' && winner === 'HOME_TEAM'))
+      const awayAdvanced = isAdvancingKnockout && (awayResult === 'W' || (awayResult === 'D' && winner === 'AWAY_TEAM'))
 
       formEntries.get(home)!.push({ result: homeResult, utcDate, pts: homeResult === 'W' ? 3 : homeResult === 'D' ? 1 : 0, knockout: isKnockout, won: homeAdvanced, finished: isFinished })
       formEntries.get(away)!.push({ result: awayResult, utcDate, pts: awayResult === 'W' ? 3 : awayResult === 'D' ? 1 : 0, knockout: isKnockout, won: awayAdvanced, finished: isFinished })

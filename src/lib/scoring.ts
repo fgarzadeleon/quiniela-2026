@@ -156,9 +156,9 @@ function scoreTeamMatches(teamName: string, teamMatches: Match[]): number {
     const isHome = m.home_team === teamName
     const gf = isHome ? m.home_score : m.away_score
     const ga = isHome ? m.away_score : m.home_score
-    if (gf > ga) pts += scoring.win
-    else if (gf === ga) pts += scoring.draw
-    else pts += scoring.loss
+    const resultPts = gf > ga ? scoring.win : gf === ga ? scoring.draw : scoring.loss
+    // 3rd place match is a consolation game: win/draw/loss counts for half, goals stay full value
+    pts += m.stage === 'THIRD_PLACE' ? resultPts / 2 : resultPts
     pts += gf * scoring.goalFor + ga * scoring.goalAgainst
   }
   return pts
@@ -264,10 +264,11 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
 
       let pts = scoreTeamMatches(teamName, teamMatches)
 
-      if (stage !== 'GROUP_STAGE') {
+      if (stage !== 'GROUP_STAGE' && stage !== 'THIRD_PLACE') {
         // Advance for WINNING this knockout round, credited immediately in this stage's column.
         // Each KO round won earns exactly one advance — no deferred/arrival mechanism.
         // This ensures QF advance goes only to QF winners, not to both QF teams.
+        // 3rd place match is a consolation game, not an advancement — no bonus either way.
         const wonStage = teamMatches.some(m => {
           const isHome = m.home_team === teamName
           const gf = isHome ? m.home_score : m.away_score

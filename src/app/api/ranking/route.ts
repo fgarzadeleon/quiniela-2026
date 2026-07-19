@@ -18,6 +18,7 @@ const STAGE_MAP: Record<string, Match['stage']> = {
   ROUND_OF_16:    'ROUND_OF_16',
   QUARTER_FINALS: 'QUARTER_FINALS',
   SEMI_FINALS:    'SEMI_FINALS',
+  THIRD_PLACE:    'THIRD_PLACE',
   FINAL:          'FINAL',
 }
 
@@ -112,7 +113,8 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
 
       // Advance for WINNING this KO round, credited immediately in the current stage's column.
       // QF advance goes only to QF winners; R16 advance only to R16 winners, etc.
-      if (stage !== 'GROUP_STAGE' && stage !== 'FINAL') {
+      // 3rd place match is a consolation game, not an advancement — no bonus either way.
+      if (stage !== 'GROUP_STAGE' && stage !== 'FINAL' && stage !== 'THIRD_PLACE') {
         const wonStage = stageMatches.some(m => {
           const isHome = m.home_team === teamName
           const mGf = isHome ? m.home_score : m.away_score
@@ -127,9 +129,11 @@ function computeTeamTable(picks: Pick[], matches: Match[]): TeamTableRow[] {
         const goalsFor = isHome ? m.home_score : m.away_score
         const goalsAgainst = isHome ? m.away_score : m.home_score
         gf += goalsFor; ga += goalsAgainst
-        if (goalsFor > goalsAgainst) { wins++; pts += scoring.win }
-        else if (goalsFor === goalsAgainst) { draws++; pts += scoring.draw }
-        else { losses++; pts += scoring.loss }
+        // 3rd place match: win/draw/loss counts for half, goals stay full value
+        const half = stage === 'THIRD_PLACE' ? 0.5 : 1
+        if (goalsFor > goalsAgainst) { wins++; pts += scoring.win * half }
+        else if (goalsFor === goalsAgainst) { draws++; pts += scoring.draw * half }
+        else { losses++; pts += scoring.loss * half }
         pts += goalsFor * scoring.goalFor
         pts += goalsAgainst * scoring.goalAgainst
         // Final: champion bonus for winner (handles PSO via winner field)

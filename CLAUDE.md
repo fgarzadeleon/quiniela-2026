@@ -35,7 +35,7 @@ FOOTBALL_DATA_API_KEY=59f9b26e489247708e7b68f9bd08f7e8
 ADMIN_PASSWORD=quiniela2026
 ```
 
-## Game Rules (v1.2)
+## Game Rules (v1.3)
 
 - Pick **5 teams** from 48 WC participants, **300pt budget**, max **1 Tier A** team
 - Pick **3 goalscorers** from your selected teams
@@ -58,7 +58,8 @@ ADMIN_PASSWORD=quiniela2026
 **Knockout scoring rules:**
 - Extra time counts as part of the match (W/L if decided in ET using `score.extraTime`)
 - Penalties = Draw result for both teams. Winner on pens gets the **Round Advanced** bonus.
-- Round Advanced is earned once per knockout round played, starting from R16. Winning R32 immediately earns the R16 entry bonus (awarded proactively). A team reaching the Final earns it 4 times total.
+- Round Advanced is earned once per knockout round played, starting from R16. Winning R32 immediately earns the R16 entry bonus (awarded proactively). A team reaching the Final earns it 5 times total (group + R32 + R16 + QF + SF win). The SF loser earns no bonus for the SF and drops to the 3rd place match instead.
+- **3rd place match (`THIRD_PLACE` stage, sits between `SEMI_FINALS` and `FINAL` in `STAGE_ORDER`)**: Win/Draw/Loss points are halved; goals scored/conceded are NOT halved. No Round Advanced bonus for either team regardless of result — it's a consolation game, not an advancement. FD API stage value is literally `THIRD_PLACE`. This halving + no-bonus rule is implemented independently in `scoring.ts` (`scoreTeamMatches`/`computePoints`), `ranking/route.ts` (`computeTeamTable`), `ranking/breakdown/route.ts`, and `audit-matches/route.ts` — keep them in sync if the rule ever changes. `team-form/route.ts` also excludes `THIRD_PLACE` wins from the gold "advanced" ring.
 
 Implemented in `src/lib/scoring.ts` → `calculatePickPoints(pick, matches)`.
 
@@ -174,7 +175,7 @@ Password: `ADMIN_PASSWORD` env var. `/admin` has simulation actions (test only) 
 
 ## Rules Page
 
-`/rules` — versioned with changelog (v1.0 → v1.1 → v1.2). Update `CHANGELOG` array at top of file when rules change. Current version: **v1.2**.
+`/rules` — versioned with changelog (v1.0 → v1.1 → v1.2 → v1.3). Update `CHANGELOG` array at top of file when rules change. Current version: **v1.3**.
 
 ## Key Files
 

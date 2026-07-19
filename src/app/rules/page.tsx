@@ -8,6 +8,17 @@ export const metadata = { title: 'Rules · Quiniela 2026' }
 
 const CHANGELOG = [
   {
+    version: '1.3',
+    date: '19 Jul 2026',
+    label: '3rd place match',
+    color: '#D72638',
+    changes: [
+      'The 3rd place match scores at half value for win/draw/loss — goals scored and conceded still count in full',
+      'No Round Advanced bonus for either team in the 3rd place match — it\'s a consolation game, not an advancement',
+      'Corrected v1.2: Round Advanced for the semi-final is only earned by the team that wins and reaches the Final, not by the team that drops into the 3rd place match',
+    ],
+  },
+  {
     version: '1.2',
     date: '28 Jun 2026',
     label: 'Knockout update',
@@ -89,7 +100,7 @@ export default function RulesPage() {
         >
           THE RULES
         </h1>
-        <p className="text-white/50 text-sm mt-2">Everything you need to know. Current version: <span style={{ color: '#F5C518' }}>v1.2</span></p>
+        <p className="text-white/50 text-sm mt-2">Everything you need to know. Current version: <span style={{ color: '#F5C518' }}>v1.3</span></p>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-10">
@@ -179,10 +190,12 @@ export default function RulesPage() {
                   <li>• Winning R32 → advancing to R16</li>
                   <li>• Winning R16 → advancing to Quarter Finals</li>
                   <li>• Winning QF → advancing to Semi Finals</li>
-                  <li>• Winning SF → advancing to Final or 3rd place match</li>
-                  <li>• Playing in the Final or 3rd place match (both teams earn it)</li>
+                  <li>• Winning SF → advancing to the Final</li>
                 </ul>
-                <span className="text-white/50 text-[11px]">A team that reaches the Final earns this bonus 6 times. A team eliminated in R32 earns it once (group stage only).</span>
+                <span className="text-white/50 text-[11px]">A team that reaches the Final earns this bonus 5 times. A team eliminated in R32 earns it once (group stage only). The team losing the semi-final does not earn a bonus for the semi-final and instead plays the 3rd place match (see below).</span>
+              </Rule>
+              <Rule>
+                <strong className="text-white">3rd place match scores at half value.</strong> Win/Draw/Loss points count for half the normal amount — goals scored and conceded are unaffected. Neither team earns a Round Advanced bonus for this match, win or lose.
               </Rule>
               <Rule>
                 <strong className="text-white">Champion bonus (+500)</strong> is awarded on top of all other Final bonuses for the winning team.
