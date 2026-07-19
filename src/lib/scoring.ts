@@ -46,6 +46,17 @@ export function normalizeEffectiveStage<T extends string>(stage: T): T | 'THIRD_
   return stage === 'FINAL' ? 'THIRD_PLACE' : stage
 }
 
+// When a wildcarded pick's new teams/scorers should stop being hidden as "pending" and start
+// showing for real. For every other window this is simply the matching deadline (submission
+// cutoff and stage kickoff were the same moment). But the last window decouples them — you
+// can still submit up until the Final kickoff, while THIRD_PLACE's own kickoff (and its
+// result) is already in the past — so picks effective from THIRD_PLACE should reveal at that
+// earlier moment, not wait for the unrelated Final submission deadline.
+export function revealMoment(effectiveStage: string): Date {
+  if (normalizeEffectiveStage(effectiveStage) === 'THIRD_PLACE') return THIRD_PLACE_FORFEIT_CUTOFF
+  return WILDCARD_DEADLINES.find(d => d.effectiveStage === effectiveStage)?.deadline ?? new Date(8640000000000000)
+}
+
 // Exact UTC start time for each matchday-level effective stage
 const MD_SPLIT_DATES: Partial<Record<MatchStage, Date>> = {
   GROUP_STAGE_MD2: new Date('2026-06-18T16:00:00Z'),

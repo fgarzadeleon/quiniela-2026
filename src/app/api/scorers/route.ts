@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { fetchSquadMap, isValidScorer } from '@/lib/squad-validation'
-import { WILDCARD_DEADLINES, normalizeEffectiveStage, THIRD_PLACE_FORFEIT_CUTOFF } from '@/lib/scoring'
+import { normalizeEffectiveStage, revealMoment, THIRD_PLACE_FORFEIT_CUTOFF } from '@/lib/scoring'
 import { FD_TO_OURS } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
@@ -246,12 +246,10 @@ export async function GET() {
   const quinielaScorers = picks
     .filter(p => p.scorer1 || p.scorer2 || p.scorer3 || p.wildcard_old_scorer1)
     .map(p => {
-      // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline table
-      // started storing 'THIRD_PLACE' for this same window — see scoring.ts.
-      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
-        const d = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from))
-        return d ? now < d.deadline : false
-      })())
+      // revealMoment, not the submission deadline: THIRD_PLACE-effective picks reveal at the
+      // 3rd place kickoff (already past), even though the wildcard window itself stays open
+      // until the Final — see scoring.ts.
+      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && now < revealMoment(p.wildcard_effective_from))
 
       const effectiveStage = p.wildcard_effective_from as string | null
       const hasOldScorers = p.wildcard_used && (p.wildcard_old_scorer1 || p.wildcard_old_scorer2 || p.wildcard_old_scorer3)

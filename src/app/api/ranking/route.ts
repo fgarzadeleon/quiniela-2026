@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES, computeGroupQualifiers, normalizeEffectiveStage } from '@/lib/scoring'
+import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES, computeGroupQualifiers, revealMoment } from '@/lib/scoring'
 import { getTeam, SCORING, STAGE_ORDER, FD_TO_OURS } from '@/lib/teams'
 import { Match, Pick } from '@/types'
 
@@ -245,15 +245,11 @@ export async function GET() {
         : []
       const matchPoints = calculatePickPoints(p, matches)
 
-      // Wildcard is "pending" until the specific effective-stage deadline is reached.
-      // Match against wildcard_effective_from exactly — using .some() would keep it
-      // pending indefinitely because later deadlines are also in the future.
-      // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline
-      // table started storing 'THIRD_PLACE' for this same window — see scoring.ts.
-      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
-        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from!))
-        return effectiveDeadline ? now < effectiveDeadline.deadline : false
-      })())
+      // Wildcard is "pending" until its revealMoment is reached — not the submission
+      // deadline. Those coincide for every stage except the last: THIRD_PLACE-effective
+      // picks reveal at the 3rd place kickoff (already past) even though the wildcard
+      // window itself stays open until the Final — see scoring.ts.
+      const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && now < revealMoment(p.wildcard_effective_from))
 
       let team_points: { name: string; points: number }[] = []
       let old_team_points: { name: string; points: number }[] = []
@@ -324,12 +320,11 @@ export async function GET() {
   const realPicks = (picks as Pick[]).filter(p => !p.name.toLowerCase().startsWith('test'))
 
   // For fun stats and team table: pending wildcard picks must show old teams
-  // so new team choices aren't revealed before the effective deadline.
-  // Use the same effectiveStage-based logic as isWcPending above.
+  // so new team choices aren't revealed before revealMoment.
+  // Use the same logic as isWcPending above.
   const effectivePicks = realPicks.map(p => {
     if (!p.wildcard_used || !p.wildcard_old_team1 || !p.wildcard_effective_from) return p
-    const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from!))
-    if (!effectiveDeadline || now >= effectiveDeadline.deadline) return p
+    if (now >= revealMoment(p.wildcard_effective_from)) return p
     return {
       ...p,
       team1: p.wildcard_old_team1,
