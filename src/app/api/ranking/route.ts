@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES, computeGroupQualifiers } from '@/lib/scoring'
+import { calculatePickPoints, calculatePickPointsBreakdown, calculateOldTeamPointsBreakdown, WILDCARD_DEADLINES, computeGroupQualifiers, normalizeEffectiveStage } from '@/lib/scoring'
 import { getTeam, SCORING, STAGE_ORDER, FD_TO_OURS } from '@/lib/teams'
 import { Match, Pick } from '@/types'
 
@@ -248,8 +248,10 @@ export async function GET() {
       // Wildcard is "pending" until the specific effective-stage deadline is reached.
       // Match against wildcard_effective_from exactly — using .some() would keep it
       // pending indefinitely because later deadlines are also in the future.
+      // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline
+      // table started storing 'THIRD_PLACE' for this same window — see scoring.ts.
       const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
-        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+        const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from!))
         return effectiveDeadline ? now < effectiveDeadline.deadline : false
       })())
 
@@ -326,7 +328,7 @@ export async function GET() {
   // Use the same effectiveStage-based logic as isWcPending above.
   const effectivePicks = realPicks.map(p => {
     if (!p.wildcard_used || !p.wildcard_old_team1 || !p.wildcard_effective_from) return p
-    const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+    const effectiveDeadline = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from!))
     if (!effectiveDeadline || now >= effectiveDeadline.deadline) return p
     return {
       ...p,

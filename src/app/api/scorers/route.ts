@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { fetchSquadMap, isValidScorer } from '@/lib/squad-validation'
-import { WILDCARD_DEADLINES } from '@/lib/scoring'
+import { WILDCARD_DEADLINES, normalizeEffectiveStage, THIRD_PLACE_FORFEIT_CUTOFF } from '@/lib/scoring'
 import { FD_TO_OURS } from '@/lib/teams'
 
 export const dynamic = 'force-dynamic'
@@ -16,7 +16,11 @@ const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
   QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', THIRD_PLACE: '3rd', FINAL: 'Final',
 }
 
-// Period labels for the by-gameweek breakdown
+// Period labels for the by-gameweek breakdown. THIRD_PLACE is deliberately NOT in this
+// sequence — every other snapshot here is captured right before its stage's matches, but
+// the THIRD_PLACE one (see admin snapshot-scorers) was captured AFTER that match finished,
+// specifically to isolate its own goals for forfeiture (below). Chaining it into this
+// before/after delta sequence would mislabel the SF/Final periods, so it's used standalone.
 const STAGE_SEQUENCE_FOR_PERIODS = [
   'GROUP_STAGE_MD2', 'GROUP_STAGE_MD3', 'ROUND_OF_32',
   'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
@@ -28,6 +32,14 @@ const PERIOD_LABEL_BEFORE: Record<string, string> = {
 const PERIOD_LABEL_AFTER: Record<string, string> = {
   GROUP_STAGE_MD2: 'MD2+', GROUP_STAGE_MD3: 'MD3+', ROUND_OF_32: 'R32+',
   ROUND_OF_16: 'R16+', QUARTER_FINALS: 'QF+', SEMI_FINALS: 'SF+', FINAL: 'Final',
+}
+
+// For the old/new scorer split boundary, effectiveStage THIRD_PLACE must resolve to the
+// SEMI_FINALS snapshot — nothing happened between the semis and 3rd-place kickoff — so a
+// swapped-out scorer isn't credited with 3rd place goals they shouldn't get (mirrors the
+// team-level split in scoring.ts, where old teams don't score the 3rd place match either).
+function splitBoundaryStage(stage: string): string {
+  return stage === 'THIRD_PLACE' ? 'SEMI_FINALS' : stage
 }
 
 function norm(s: string) {
@@ -104,6 +116,10 @@ export async function GET() {
     const rows = snapshots.filter(s => s.effective_stage === stage)
     if (rows.length > 0) snapshotsByStage.set(stage, buildGoalsMap(rows))
   }
+  // THIRD_PLACE isn't part of the periods sequence (see comment above) but is still loaded
+  // here so goalsBeforeStage() can look it up for the forfeiture calculation below.
+  const thirdPlaceRows = snapshots.filter(s => s.effective_stage === 'THIRD_PLACE')
+  if (thirdPlaceRows.length > 0) snapshotsByStage.set('THIRD_PLACE', buildGoalsMap(thirdPlaceRows))
 
   const availableSnaps = STAGE_SEQUENCE_FOR_PERIODS.filter(s => snapshotsByStage.has(s))
 
@@ -123,6 +139,19 @@ export async function GET() {
     const snap = snapshotsByStage.get(stage)
     if (!snap) return 0
     return lookupGoals(scorerName, snap).goals
+  }
+
+  // Goals scored specifically during the 3rd place match (SEMI_FINALS snapshot → THIRD_PLACE
+  // snapshot delta) — used to void that match's goals for players who forfeit it below.
+  function thirdPlaceOnlyGoals(scorerName: string): number {
+    return Math.max(0, goalsBeforeStage(scorerName, 'THIRD_PLACE') - goalsBeforeStage(scorerName, 'SEMI_FINALS'))
+  }
+
+  // Wildcarding after the 3rd place match was already played means the result was known —
+  // forfeit that match's goals entirely, for every currently-held scorer, kept or new. Mirrors
+  // the identical team-points forfeiture in scoring.ts.
+  function forfeitsThirdPlace(p: { wildcard_used: boolean | null; wildcard_used_at: string | null }): boolean {
+    return !!(p.wildcard_used && p.wildcard_used_at && new Date(p.wildcard_used_at) > THIRD_PLACE_FORFEIT_CUTOFF)
   }
 
   // Compute an array of goals per period for a single scorer name
@@ -166,7 +195,7 @@ export async function GET() {
       return totals
     }
 
-    const effectiveSnapIdx = availableSnaps.indexOf(effectiveStage)
+    const effectiveSnapIdx = availableSnaps.indexOf(splitBoundaryStage(normalizeEffectiveStage(effectiveStage!)))
     const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
     const newNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
     const newNamesNorm = new Set(newNames.map(norm))
@@ -200,14 +229,27 @@ export async function GET() {
       }
     }
 
+    // Forfeit the 3rd place match's goals — they landed in the bucket right after the
+    // SEMI_FINALS boundary (currently the trailing "SF+" bucket, since no FINAL snapshot
+    // exists yet). Void up to that amount, for every currently-held scorer.
+    if (forfeitsThirdPlace(p)) {
+      const forfeitIdx = effectiveSnapIdx + 1
+      const forfeited = newNames.reduce((sum, n) => sum + thirdPlaceOnlyGoals(n), 0)
+      if (forfeitIdx >= 0 && forfeitIdx < numPeriods && forfeited > 0) {
+        totals[forfeitIdx] = Math.max(0, totals[forfeitIdx] - forfeited)
+      }
+    }
+
     return totals
   }
 
   const quinielaScorers = picks
     .filter(p => p.scorer1 || p.scorer2 || p.scorer3 || p.wildcard_old_scorer1)
     .map(p => {
+      // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline table
+      // started storing 'THIRD_PLACE' for this same window — see scoring.ts.
       const isWcPending = !!(p.wildcard_used && p.wildcard_effective_from && (() => {
-        const d = WILDCARD_DEADLINES.find(d => d.effectiveStage === p.wildcard_effective_from)
+        const d = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(p.wildcard_effective_from))
         return d ? now < d.deadline : false
       })())
 
@@ -229,6 +271,9 @@ export async function GET() {
         const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
         scorerPicks = oldNames.map(name => toScorerRow(name, lookupGoals(name, currentGoals).goals, false))
       } else if (hasOldScorers && effectiveStage) {
+        // Split boundary: THIRD_PLACE resolves to the SEMI_FINALS snapshot (see
+        // splitBoundaryStage) so old scorers aren't credited with 3rd place goals.
+        const boundaryStage = splitBoundaryStage(normalizeEffectiveStage(effectiveStage))
         const oldNames = [p.wildcard_old_scorer1, p.wildcard_old_scorer2, p.wildcard_old_scorer3].filter(Boolean) as string[]
         const newNames = [p.scorer1, p.scorer2, p.scorer3].filter(Boolean) as string[]
         const newNamesNorm = new Set(newNames.map(norm))
@@ -236,16 +281,22 @@ export async function GET() {
         const oldPills = oldNames
           .filter(name => !newNamesNorm.has(norm(name)))
           .map(name => {
-            const goals = goalsBeforeStage(name, effectiveStage)
+            const goals = goalsBeforeStage(name, boundaryStage)
             return toScorerRow(name, goals, true)
           })
+
+        // Wildcarding after the 3rd place match already happened forfeits its goals —
+        // for every currently-held scorer, kept or new. Mirrors the team-points forfeiture
+        // in scoring.ts.
+        const forfeit = forfeitsThirdPlace(p)
 
         const oldNamesNorm = new Set(oldNames.map(norm))
         const newPills = newNames.map(name => {
           const total = lookupGoals(name, currentGoals).goals
           const isKept = oldNamesNorm.has(norm(name))
-          const before = isKept ? 0 : goalsBeforeStage(name, effectiveStage)
-          const goals = Math.max(0, total - before)
+          const before = isKept ? 0 : goalsBeforeStage(name, boundaryStage)
+          const forfeited = forfeit ? thirdPlaceOnlyGoals(name) : 0
+          const goals = Math.max(0, total - before - forfeited)
           const row = toScorerRow(name, goals, false)
           if (!isKept) row.subIn = true
           return row

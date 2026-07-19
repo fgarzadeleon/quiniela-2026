@@ -4,7 +4,7 @@ import { TEAMS, TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER, TIER_LABELS } f
 import Flag from '@/components/Flag'
 import PlayerSelect, { TeamSquad } from '@/components/PlayerSelect'
 import { Tier } from '@/types'
-import { WILDCARD_DEADLINES, getNextWildcardDeadline, type WildcardDeadline } from '@/lib/scoring'
+import { WILDCARD_DEADLINES, getNextWildcardDeadline, normalizeEffectiveStage, THIRD_PLACE_FORFEIT_CUTOFF, type WildcardDeadline } from '@/lib/scoring'
 
 function fmtDate(d: Date) {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -216,12 +216,17 @@ export default function MyPicksPage() {
 
   const wcNow = new Date()
   const wcNext = getNextWildcardDeadline(wcNow)
+  // The 3rd place match has already been played — wildcarding now means you already know
+  // its result, so its points and goalscorer goals are forfeited entirely (see scoring.ts).
+  const wcForfeitsThirdPlace = wcNow > THIRD_PLACE_FORFEIT_CUTOFF
 
-  // Wildcard is modifiable if it's been used but the effective-from deadline hasn't closed yet
+  // Wildcard is modifiable if it's been used but the effective-from deadline hasn't closed yet.
+  // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline table
+  // started storing 'THIRD_PLACE' for this same window — see scoring.ts.
   const isWildcardModifiable = !!(
     pick?.wildcard_used &&
     pick.wildcard_effective_from &&
-    WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from && wcNow < d.deadline)
+    WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(pick.wildcard_effective_from!) && wcNow < d.deadline)
   )
 
   const currentTeams = pick
@@ -426,7 +431,7 @@ export default function MyPicksPage() {
         ) : pick.wildcard_used ? (
           // Post-deadline, wildcard spent
           (() => {
-            const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from)
+            const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(pick.wildcard_effective_from!))
             return (
           <div
             className="rounded-xl p-5"
@@ -493,6 +498,12 @@ export default function MyPicksPage() {
                   ⚡ Use it now → new teams score from <span style={{ fontFamily: 'Impact, sans-serif' }}>{wcNext.label}</span>
                 </p>
                 <p className="text-white/40 text-xs mt-0.5">Deadline: {fmtDate(wcNext.deadline)}</p>
+              </div>
+            )}
+            {wcNext && wcForfeitsThirdPlace && (
+              <div className="rounded-lg px-3 py-2.5 mb-4" style={{ background: 'rgba(215,38,56,0.08)', border: '1px solid rgba(215,38,56,0.25)' }}>
+                <p className="text-[#D72638] text-sm font-bold">⚠️ The 3rd place match is already over.</p>
+                <p className="text-white/50 text-xs mt-0.5">Wildcarding now forfeits its points and goalscorer goals entirely — for every team and scorer you hold, kept or new.</p>
               </div>
             )}
 
@@ -726,6 +737,12 @@ export default function MyPicksPage() {
                 ⚡ New teams score from <span style={{ fontFamily: 'Impact, sans-serif' }}>{wcNext.label}</span>
               </p>
               <p className="text-white/40 text-xs mt-0.5">Deadline: {fmtDate(wcNext.deadline)}</p>
+            </div>
+          )}
+          {wcNext && wcForfeitsThirdPlace && (
+            <div className="mt-3 inline-block rounded-lg px-4 py-2.5 text-center" style={{ background: 'rgba(215,38,56,0.08)', border: '1px solid rgba(215,38,56,0.25)' }}>
+              <p className="text-[#D72638] text-sm font-bold">⚠️ The 3rd place match is already over.</p>
+              <p className="text-white/50 text-xs mt-0.5">Wildcarding now forfeits its points and goalscorer goals entirely — for every team and scorer you hold, kept or new.</p>
             </div>
           )}
         </div>

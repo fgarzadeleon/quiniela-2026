@@ -9,7 +9,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD
 
 const VALID_STAGES = [
   'GROUP_STAGE_MD2', 'GROUP_STAGE_MD3', 'ROUND_OF_32',
-  'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'FINAL',
+  'ROUND_OF_16', 'QUARTER_FINALS', 'SEMI_FINALS', 'THIRD_PLACE', 'FINAL',
 ]
 
 export async function POST(req: NextRequest) {

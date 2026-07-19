@@ -26,10 +26,25 @@ export const WILDCARD_DEADLINES: WildcardDeadline[] = [
   { label: 'Round of 16',             deadline: new Date('2026-07-04T17:00:00Z'), stage: 'ROUND_OF_16', effectiveStage: 'ROUND_OF_16'     },
   { label: 'Quarter Finals',          deadline: new Date('2026-07-09T20:00:00Z'), stage: 'QUARTER_FINALS', effectiveStage: 'QUARTER_FINALS' },
   { label: 'Semi Finals',             deadline: new Date('2026-07-14T19:00:00Z'), stage: 'SEMI_FINALS', effectiveStage: 'SEMI_FINALS'     },
-  // One deadline covers both the 3rd place match and the Final — but new teams take effect
-  // from THIRD_PLACE (not FINAL), so old teams don't keep scoring the 3rd place match too.
+  // Last wildcard window: submissions stay open until the Final kickoff (not the 3rd place
+  // kickoff — players shouldn't be locked out early). Anyone wildcarding after the 3rd place
+  // match has already been played forfeits that match's points and goalscorer goals — see
+  // THIRD_PLACE_FORFEIT_CUTOFF below, checked against wildcard_used_at at scoring time.
   { label: 'Final',                   deadline: new Date('2026-07-19T19:00:00Z'), stage: 'FINAL',        effectiveStage: 'THIRD_PLACE'     },
 ]
+
+// Kickoff of the 3rd place match — the actual forfeiture cutoff. Anyone whose wildcard_used_at
+// is after this already knew the 3rd place result before swapping, so neither their old nor
+// new team gets credit for that match (see the forfeit check in computePoints below).
+export const THIRD_PLACE_FORFEIT_CUTOFF = new Date('2026-07-18T21:00:00Z')
+
+// Picks that wildcarded through this deadline before the THIRD_PLACE fix shipped had
+// 'FINAL' written to wildcard_effective_from instead of 'THIRD_PLACE'. Since one deadline
+// covers both the 3rd place match and the Final, the two values mean the same thing —
+// normalize here so old records behave identically to new ones without a DB migration.
+export function normalizeEffectiveStage<T extends string>(stage: T): T | 'THIRD_PLACE' {
+  return stage === 'FINAL' ? 'THIRD_PLACE' : stage
+}
 
 // Exact UTC start time for each matchday-level effective stage
 const MD_SPLIT_DATES: Partial<Record<MatchStage, Date>> = {
@@ -189,7 +204,7 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
   function teamsForStage(stage: string): string[] {
     if (!hasWildcardData) return [pick.team1, pick.team2, pick.team3, pick.team4, pick.team5]
     const stageIdx = STAGE_ORDER.indexOf(stage)
-    const effectiveIdx = STAGE_ORDER.indexOf(pick.wildcard_effective_from!)
+    const effectiveIdx = STAGE_ORDER.indexOf(normalizeEffectiveStage(pick.wildcard_effective_from!))
     if (stageIdx < effectiveIdx) {
       return [pick.wildcard_old_team1!, pick.wildcard_old_team2!, pick.wildcard_old_team3!, pick.wildcard_old_team4!, pick.wildcard_old_team5!]
     }
@@ -219,9 +234,17 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
 
   let total = 0
 
+  // Wildcarding after the 3rd place match was already played means the result was known —
+  // forfeit that match's points entirely (neither old nor new team earns from it) so nobody
+  // can wildcard into a team that already won it, or drop one that already lost it.
+  const forfeitsThirdPlace = !!(
+    hasWildcardData && pick.wildcard_used_at && new Date(pick.wildcard_used_at) > THIRD_PLACE_FORFEIT_CUTOFF
+  )
+
   for (const stage of STAGE_ORDER) {
     const stageMatches = finishedMatches.filter(m => m.stage === stage)
     if (stageMatches.length === 0) continue
+    if (stage === 'THIRD_PLACE' && forfeitsThirdPlace) continue
 
     // Group-stage wildcard: score each match against whichever teams were active at that time
     if (stage === 'GROUP_STAGE' && isGroupStageWildcard && wcSplitDate) {
@@ -254,7 +277,7 @@ function computePoints(pick: Pick, matches: Match[]): { total: number; byTeam: M
 
     const teams = teamsForStage(stage)
     const usingOldTeams = hasWildcardData && !isGroupStageWildcard &&
-      STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(pick.wildcard_effective_from!)
+      STAGE_ORDER.indexOf(stage) < STAGE_ORDER.indexOf(normalizeEffectiveStage(pick.wildcard_effective_from!))
 
     for (const teamName of teams) {
       const team = getTeam(teamName)

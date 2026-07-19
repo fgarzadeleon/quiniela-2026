@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { createServerClient } from '@/lib/supabase'
 import { TEAM_MAP, MAX_BUDGET, TEAMS_TO_PICK, MAX_A_TIER } from '@/lib/teams'
-import { getCurrentRound, getNextRound, getNextWildcardDeadline, WILDCARD_DEADLINES } from '@/lib/scoring'
+import { getCurrentRound, getNextRound, getNextWildcardDeadline, WILDCARD_DEADLINES, normalizeEffectiveStage } from '@/lib/scoring'
 import { fetchSquadMap, invalidScorers } from '@/lib/squad-validation'
 const DEADLINE = new Date('2026-06-11T19:00:00Z')
 const SAFE_FIELDS = 'id, name, team1, team2, team3, team4, team5, scorer1, scorer2, scorer3, wildcard_used, wildcard_effective_from, wildcard_old_team1, wildcard_old_team2, wildcard_old_team3, wildcard_old_team4, wildcard_old_team5, wildcard_old_scorer1, wildcard_old_scorer2, wildcard_old_scorer3, total_cost, total_points, created_at, updated_at'
@@ -136,7 +136,9 @@ export async function PATCH(req: NextRequest) {
 
   const isModify = pick.wildcard_used
   if (isModify) {
-    const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === pick.wildcard_effective_from)
+    // normalizeEffectiveStage handles picks written with 'FINAL' before the deadline table
+    // started storing 'THIRD_PLACE' for this same window — see scoring.ts.
+    const wdEntry = WILDCARD_DEADLINES.find(d => d.effectiveStage === normalizeEffectiveStage(pick.wildcard_effective_from))
     if (!wdEntry || new Date() >= wdEntry.deadline) {
       return NextResponse.json({ error: 'Wildcard already used' }, { status: 400 })
     }
