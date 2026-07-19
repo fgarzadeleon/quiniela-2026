@@ -2,6 +2,7 @@ import Link from 'next/link'
 import CountdownTimer from '@/components/CountdownTimer'
 import Flag from '@/components/Flag'
 import HomeWidgets from '@/components/HomeWidgets'
+import FinalPredictor from '@/components/FinalPredictor'
 import { TEAMS } from '@/lib/teams'
 import { getEliminatedTeamNames } from '@/lib/team-status'
 import { Tier } from '@/types'
@@ -134,6 +135,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <FinalPredictor />
 
       <HomeWidgets />
 
