@@ -6,10 +6,10 @@ export const AUDIT_STAGE_KEYS = [
 ] as const
 export type AuditStageKey = typeof AUDIT_STAGE_KEYS[number]
 
-// Maps wildcard_effective_from → first AUDIT_STAGE_KEYS index where NEW teams apply
-// (THIRD_PLACE is never a wildcard effective_from value — it's never a deadline option —
-// but it sits at index 7, between SEMI_FINALS and FINAL, so it correctly uses whichever
-// team set was active as of the SEMI_FINALS/FINAL split.)
+// Maps wildcard_effective_from → first AUDIT_STAGE_KEYS index where NEW teams apply.
+// The "Final" wildcard deadline stores effective_from as THIRD_PLACE (not FINAL) — one
+// deadline covers both the 3rd place match and the Final, but new teams take over from
+// the 3rd place match onward so old teams don't also score that consolation match.
 export const WC_SPLIT_IDX: Record<string, number> = {
   GROUP_STAGE_MD2: 1,
   GROUP_STAGE_MD3: 2,
@@ -17,6 +17,7 @@ export const WC_SPLIT_IDX: Record<string, number> = {
   ROUND_OF_16:     4,
   QUARTER_FINALS:  5,
   SEMI_FINALS:     6,
+  THIRD_PLACE:     7,
   FINAL:           8,
 }
 

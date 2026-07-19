@@ -26,7 +26,9 @@ export const WILDCARD_DEADLINES: WildcardDeadline[] = [
   { label: 'Round of 16',             deadline: new Date('2026-07-04T17:00:00Z'), stage: 'ROUND_OF_16', effectiveStage: 'ROUND_OF_16'     },
   { label: 'Quarter Finals',          deadline: new Date('2026-07-09T20:00:00Z'), stage: 'QUARTER_FINALS', effectiveStage: 'QUARTER_FINALS' },
   { label: 'Semi Finals',             deadline: new Date('2026-07-14T19:00:00Z'), stage: 'SEMI_FINALS', effectiveStage: 'SEMI_FINALS'     },
-  { label: 'Final',                   deadline: new Date('2026-07-19T19:00:00Z'), stage: 'FINAL',        effectiveStage: 'FINAL'           },
+  // One deadline covers both the 3rd place match and the Final — but new teams take effect
+  // from THIRD_PLACE (not FINAL), so old teams don't keep scoring the 3rd place match too.
+  { label: 'Final',                   deadline: new Date('2026-07-19T19:00:00Z'), stage: 'FINAL',        effectiveStage: 'THIRD_PLACE'     },
 ]
 
 // Exact UTC start time for each matchday-level effective stage

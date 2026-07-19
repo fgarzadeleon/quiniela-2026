@@ -83,7 +83,9 @@ ROUND_OF_32      — deadline 2026-06-28T19:00:00Z
 ROUND_OF_16      — deadline 2026-07-04T17:00:00Z
 QUARTER_FINALS   — deadline 2026-07-09T20:00:00Z
 SEMI_FINALS      — deadline 2026-07-14T19:00:00Z
-FINAL            — deadline 2026-07-19T19:00:00Z
+FINAL            — deadline 2026-07-19T19:00:00Z (effective_from stored as THIRD_PLACE, not FINAL —
+                    one deadline covers both the 3rd place match and the Final, but new teams take
+                    over starting at the 3rd place match so old teams don't score that match too)
 ```
 
 Defined in `src/lib/scoring.ts` → `WILDCARD_DEADLINES`.

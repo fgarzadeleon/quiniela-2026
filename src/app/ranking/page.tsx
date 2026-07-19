@@ -54,7 +54,7 @@ const MEDAL = ['🥇', '🥈', '🥉']
 const EFFECTIVE_STAGE_LABEL: Record<string, string> = {
   GROUP_STAGE_MD2: 'MD2', GROUP_STAGE_MD3: 'MD3',
   ROUND_OF_32: 'R32', ROUND_OF_16: 'R16',
-  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', FINAL: 'Final',
+  QUARTER_FINALS: 'QF', SEMI_FINALS: 'SF', THIRD_PLACE: '3rd', FINAL: 'Final',
 }
 
 type SubStatus = 'normal' | 'subOut' | 'subIn'
